@@ -1,0 +1,15 @@
+This project includes code derived from the `dart_odbc` project.
+
+What is included
+- The `db_client` implementation in this repository is based on code from `dart_odbc`.
+  See files under `lib/src/clients/db/` folder for the code origins and development copies.
+
+Upstream project
+- Original project: https://github.com/SL-Pirate/dart_odbc
+- User fork (development): https://github.com/ccisnedev/dart_odbc
+
+License and attribution
+- The original `dart_odbc` code is used under its original license. Please consult the original repository for full license terms.
+- This NOTICE is provided to attribute the original authors and to indicate where derived code lives in this repository.
+
+If you have questions about provenance or licensing, contact the repository owner.

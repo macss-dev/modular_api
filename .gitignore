@@ -1,0 +1,19 @@
+# https://dart.dev/guides/libraries/private-files
+# Created by `dart pub`
+.dart_tool/
+
+# Avoid committing pubspec.lock for library packages; see
+# https://dart.dev/guides/libraries/private-files#pubspeclock.
+pubspec.lock
+
+# devtools, scripts, and other files used during development or testing
+# but not required for normal use of the package.
+.dev
+
+# IDEs
+.idea/
+.vscode/
+.DS_Store
+
+# Coverage
+coverage/

@@ -1,0 +1,29 @@
+name: modular_api
+description: Use case centric API toolkit for Shelf UseCase base class, HTTP adapters, CORS/API-Key middlewares, and OpenAPI specifications.
+version: 0.0.1
+
+repository: https://github.com/macss-dev/modular_api
+homepage: https://github.com/macss-dev/modular_api
+issue_tracker: https://github.com/macss-dev/modular_api/issues
+documentation: https://pub.dev/documentation/modular_api/latest
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  
+dependencies:
+  http: ^1.5.0
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+  shelf_swagger_ui: ^2.0.0
+  ffi: ^2.1.2
+  dotenv: ^4.2.0
+
+dev_dependencies:
+  ffigen: ^13.0.0
+  lints: ^5.0.0
+  test: ^1.24.0
+
+topics:
+  - api
+  - openapi
+  - macss

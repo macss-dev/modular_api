@@ -1,0 +1,7 @@
+name: LibOdbc
+description: Bindings for ODBC
+output: "lib/src/clients/db/odbc/libodbc.dart"
+headers:
+  entry-points:
+    - "lib/src/clients/db/odbc/headers/sql.h"
+    - "lib/src/clients/db/odbc/headers/sqlext.h"
