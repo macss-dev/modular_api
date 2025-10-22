@@ -56,7 +56,7 @@ In `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  modular_api: ^0.0.1
+  modular_api: ^0.0.2
 ```
 
 Or from the command line:
@@ -83,7 +83,7 @@ Future<void> main(List<String> args) async {
     m.usecase('hello-world', HelloWorld.fromJson);
   });
 
-  final port = 1234;
+  final port = 8080;
   await api.serve(port: port,);
 
   print('Docs on http://localhost:$port/docs');
@@ -111,17 +111,16 @@ Example response (HelloOutput):
 * **UseCase layer** — pure logic, independent of HTTP.
 * **HTTP adapter** — turns a `UseCase` into a `Handler`.
 * **Middlewares** — cross-cutting concerns (CORS, auth, logging).
-* **Swagger UI** — documentation served from your YAML definition.
+* **Swagger UI** — documentation served automatically from registered use cases.
 
 ---
 
 ## 🧩 Middlewares
 
 ```dart
-final handler = const Pipeline()
-  .addMiddleware(cors())
-  .addMiddleware(apiKey())
-    .addHandler(router.call);
+final api = ModularApi(basePath: '/api');
+  .use(cors())
+  .use(apiKey());
 ```
 
 ---
@@ -139,7 +138,7 @@ Open `http://localhost:<port>/docs` to view the UI.
 There are two example flavours included in this repository:
 
 - `example/` — a minimal, simplified runnable example. Check `example/example.dart` and
-  `example/lib/modules/module1/hello_world.dart` for a concrete `UseCase` + DTO example.
+  `template/lib/modules/module1/hello_world.dart` for a concrete `UseCase` + DTO example.
 - `template/` — a fuller modular architecture template showing how to structure modules,
   repositories and tests for larger projects. See the `template/` folder for a complete
   starter layout (modules `module1`, `module2`, `module3`, and convenience DB clients).
