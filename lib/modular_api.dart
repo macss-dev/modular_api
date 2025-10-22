@@ -10,8 +10,8 @@ export 'src/core/modular_api.dart' show ModularApi, ModuleBuilder;
 export 'src/core/usecase/usecase.dart' show UseCase, Input, Output;
 
 // Middlewares
-export 'src/middlewares/cors.dart' show cors;
-export 'src/middlewares/apikey.dart' show apiKey;
+export 'src/middlewares/cors.dart' show exampleCorsMiddleware;
+export 'src/middlewares/apikey.dart' show exampleApiKeyMiddleware;
 
 // Clients
 export 'src/clients/http/http_client.dart' show httpClient;
