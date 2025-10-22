@@ -79,7 +79,7 @@ class HelloWorld implements UseCase<HelloInput, HelloOutput> {
     // For example, you can use a repository to fetch data.
     // final String sqlserver = HelloWorldRepository().helloSqlserver().toString();
     // stdout.writeln('SQL Server: $sqlserver');
-    
+
     output = HelloOutput(output: 'Hello, ${input.word}!');
   }
 

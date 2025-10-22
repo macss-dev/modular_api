@@ -9,7 +9,9 @@ Future<void> main(List<String> args) async {
   });
 
   final port = 1234;
-  await api.serve(port: port,);
+  await api.serve(
+    port: port,
+  );
 
   print('Docs on http://localhost:$port/docs');
 }
