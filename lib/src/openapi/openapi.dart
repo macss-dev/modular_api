@@ -1,6 +1,5 @@
 // lib/src/swagger/swagger.dart
 import 'dart:convert';
-import 'package:modular_api/modular_api.dart';
 import 'package:modular_api/src/core/modular_api.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_swagger_ui/shelf_swagger_ui.dart';
@@ -9,11 +8,12 @@ class OpenApi {
   static late Handler docs;
 
   static Future<void> init({
-    String title = 'API Documentation',
+    String title = 'Modular API',
+    required int port,
     List<Map<String, String>>? servers,
   }) async {
     final swaggerJsonString =
-        await jsonStringFromSchema(title: title, servers: servers);
+        await jsonStringFromSchema(title: title, servers: servers, port: port);
     final ui = SwaggerUI(swaggerJsonString, title: title); // wrapper
     docs = ui.call;
   }
@@ -21,14 +21,8 @@ class OpenApi {
   /// Builds the OpenAPI 3.0.0 specification
   static Future<String> jsonStringFromSchema(
       {required String title,
+      required int port,
       required List<Map<String, String>>? servers}) async {
-    int port;
-
-    /// if PORT env var is not set, this fails
-    /// and trows an exception
-    final portFromEnv = Env.getInt('PORT');
-    port = portFromEnv;
-
     // always add localhost to servers
     servers ??= [
       {'url': 'http://localhost:$port', 'description': 'Localhost'}

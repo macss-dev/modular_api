@@ -33,9 +33,22 @@ class ModularApi {
   Future<HttpServer> serve({
     InternetAddress? ip,
     required int port,
-    String? env,
     Future<void> Function(Router root)? onBeforeServe,
   }) async {
+    await OpenApi.init(
+      title: 'Example API',
+      port: port,
+      // Customize as needed
+      // servers: [
+      //   {
+      //     'url': 'http://192.168.10.18:$port',
+      //     'description': 'PROD'
+      //   }
+      // ],
+    );
+    _root.get('/docs', OpenApi.docs);
+    // root.get('/openapi.json', OpenApiSpecification.openapiJson);
+
     if (onBeforeServe != null) {
       await onBeforeServe(_root);
     }
