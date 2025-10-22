@@ -1,6 +1,6 @@
-import 'dart:io';
+// import 'dart:io';
 
-import 'package:example/modules/module1/hello_world_repository.dart';
+// import 'package:example/modules/module1/hello_world_repository.dart';
 import 'package:modular_api/modular_api.dart';
 
 /// Input for HelloWorld: a single word used in the greeting.
@@ -75,12 +75,11 @@ class HelloWorld implements UseCase<HelloInput, HelloOutput> {
 
   @override
   Future<void> execute() async {
-    // final String oracle = HelloWorldRepository().helloOracle().toString();
-    final String sqlserver = HelloWorldRepository().helloSqlserver().toString();
-
-    // stdout.writeln('Oracle: $oracle');
-    stdout.writeln('SQL Server: $sqlserver');
-
+    // Put your business logic here.
+    // For example, you can use a repository to fetch data.
+    // final String sqlserver = HelloWorldRepository().helloSqlserver().toString();
+    // stdout.writeln('SQL Server: $sqlserver');
+    
     output = HelloOutput(output: 'Hello, ${input.word}!');
   }
 

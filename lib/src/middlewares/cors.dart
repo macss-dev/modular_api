@@ -1,8 +1,8 @@
 import 'package:shelf/shelf.dart';
 
-// import '../packages/utils/env.dart';
-
-Middleware cors() {
+/// Prefer building your own CORS middleware according to your needs.
+/// use this as a starting point.
+Middleware exampleCorsMiddleware() {
   // final port = Env.getInt('PORT');
   // final environment = Env.getString('ENV'); // 'dev' o 'prod'
 

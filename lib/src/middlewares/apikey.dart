@@ -1,7 +1,9 @@
 import 'package:modular_api/src/utils/env.dart';
 import 'package:shelf/shelf.dart';
 
-Middleware apiKey() {
+/// Prefer building your own API Key middleware according to your needs.
+/// use this as a starting point.
+Middleware exampleApiKeyMiddleware() {
   final apiKey = Env.getString('API_KEY');
 
   return (Handler handler) {

@@ -46,7 +46,7 @@ add CORS / API Key middlewares, and expose Swagger / OpenAPI documentation.
   }
   ```
 
-  See `example/lib/db/db_client.dart` for convenience factories and `NOTICE` for provenance details.
+  See `template/lib/db/db_client.dart` for convenience factories and `NOTICE` for provenance details.
 
 ---
 
@@ -70,31 +70,23 @@ dart pub get
 
 ## 🚀 Quick start
 
-This quick start mirrors the included example implementation (`example/bin/example.dart`).
+This quick start mirrors the included example implementation (`example/example.dart`).
 
 ```dart
 import 'package:modular_api/modular_api.dart';
 
-Future<void> main() async {
-  final port = Env.getInt('PORT');
-
+Future<void> main(List<String> args) async {
   final api = ModularApi(basePath: '/api');
 
-  // Modules + usecases (the example project registers a HelloWorld usecase)
+  // POST api/module1/hello-world
   api.module('module1', (m) {
-    m.usecase('hello-world', HelloWorld.fromJson); // POST by default
+    m.usecase('hello-world', HelloWorld.fromJson);
   });
 
-  // Middlewares
-  api.use(cors());
+  final port = 1234;
+  await api.serve(port: port,);
 
-  await api.serve(
-    port: port,
-    onBeforeServe: (root) async {
-      await OpenApi.init('Example API');
-      root.get('/docs', OpenApi.docs);
-    },
-  );
+  print('Docs on http://localhost:$port/docs');
 }
 ```
 
@@ -138,19 +130,19 @@ final handler = const Pipeline()
 
 To auto-generate the spec from registered routes and serve a UI:
 
-```dart
-/// mount OpenApi.docs on your router (/docs)
-await OpenApi.init('My API');
-```
-
-Open `http://localhost:8080/docs` to view the UI.
+Open `http://localhost:<port>/docs` to view the UI.
 
 ---
 
-## 🧱 Modular example (`example/` folder)
+## 🧱 Modular examples
 
-Check `example/bin/example.dart` and `example/lib/modules/module1/hello_world.dart` for a concrete
-`UseCase` + DTO example and a runnable server.
+There are two example flavours included in this repository:
+
+- `example/` — a minimal, simplified runnable example. Check `example/example.dart` and
+  `example/lib/modules/module1/hello_world.dart` for a concrete `UseCase` + DTO example.
+- `template/` — a fuller modular architecture template showing how to structure modules,
+  repositories and tests for larger projects. See the `template/` folder for a complete
+  starter layout (modules `module1`, `module2`, `module3`, and convenience DB clients).
 
 ---
 

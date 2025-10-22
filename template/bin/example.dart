@@ -11,7 +11,7 @@ Future<void> main(List<String> args) async {
 
   // Direct
   // POST by default
-  // POST api/example/example-case
+  // POST api/module1/hello-world
   api.module('module1', (m) {
     m.usecase('hello-world', HelloWorld.fromJson);
   });
@@ -23,26 +23,11 @@ Future<void> main(List<String> args) async {
   // Middlewares
   api
   // .use(anotherMiddleware())
-  .use(cors());
+  .use(exampleCorsMiddleware());
 
-  await api.serve(
-    port: port,
-    onBeforeServe: (root) async {
-      await OpenApi.init(
-        title: 'Example API',
-        // Customize as needed
-        // servers: [
-        //   {
-        //     'url': 'http://192.168.10.18:$port',
-        //     'description': 'PROD'
-        //   }
-        // ],
-      );
-      root.get('/docs', OpenApi.docs);
-      // No yet implemented, coming soon
-      // root.get('/openapi.json', OpenApiSpecification.openapiJson);
-    },
-  );
+  await api.serve(port: port);
 
+  /// OpenAPI docs URL
+  /// You can access the docs at http://localhost:<port>/docs
   stdout.writeln('Docs on http://localhost:$port/docs');
 }
