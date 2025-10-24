@@ -36,7 +36,7 @@ class ModularApi {
     Future<void> Function(Router root)? onBeforeServe,
   }) async {
     _root.get('/health', (Request request) => Response.ok('ok'));
-    
+
     await OpenApi.init(
       title: 'Example API',
       port: port,
