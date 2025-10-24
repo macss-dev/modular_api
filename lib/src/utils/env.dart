@@ -30,7 +30,8 @@ class Env {
       _env.load();
       _envLoaded = true;
     } else {
-      stdout.writeln('[Env] .env file not found, falling back to Platform.environment');
+      stdout.writeln(
+          '[Env] .env file not found, falling back to Platform.environment');
     }
   }
 
@@ -66,7 +67,7 @@ class Env {
     }
     return parsed;
   }
-  
+
   @Deprecated('Avoid using this method as it may lead to unexpected behavior.')
   static Future<void> setString(String key, String value) async {
     final envFile = '${Directory.current.path}/.env';
