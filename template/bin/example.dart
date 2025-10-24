@@ -25,7 +25,7 @@ Future<void> main(List<String> args) async {
   // .use(anotherMiddleware())
   .use(exampleCorsMiddleware());
 
-  await api.serve(port: port);
+  await api.serve(port: port,);
 
   /// OpenAPI docs URL
   /// You can access the docs at http://localhost:<port>/docs

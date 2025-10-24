@@ -8,7 +8,7 @@ environment:
 
 # Add regular dependencies here.
 dependencies:
-  modular_api: ^0.0.1
+  modular_api: ^0.0.3
 
 dev_dependencies:
   lints: ^5.0.0

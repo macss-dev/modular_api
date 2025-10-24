@@ -17,3 +17,6 @@ pubspec.lock
 
 # Coverage
 coverage/
+
+# Built files
+build/

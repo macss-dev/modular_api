@@ -22,6 +22,10 @@ add CORS / API Key middlewares, and expose Swagger / OpenAPI documentation.
 - 📄 OpenAPI / Swagger helpers:
   - `OpenApi.init(title)` and `OpenApi.docs` — generate an OpenAPI spec from registered
     usecases (uses DTO `toSchema()`), and provide a Swagger UI `Handler`.
+ - 📡 Automatic health endpoint:
+   - The server registers a simple health check endpoint at `GET /health` which responds with
+     200 OK and body `ok`. This is implemented in `modular_api.dart` as:
+     `_root.get('/health', (Request request) => Response.ok('ok'));`
 - ⚙️ Utilities: `Env.getString`, `Env.getInt`, `Env.setString` (.env support via dotenv).
 - 🧪 Example project and tests included in `example/` and `test/`.
 
@@ -56,7 +60,7 @@ In `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  modular_api: ^0.0.2
+  modular_api: ^0.0.3
 ```
 
 Or from the command line:

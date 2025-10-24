@@ -1,4 +1,8 @@
 # Changelog
+## [0.0.3] - 2025-10-23
+### Added
+- Automatic health endpoint: the server registers `GET /health` which responds with `ok` on startup. Implemented in `modular_api.dart` (exposes `_root.get('/health', (Request request) => Response.ok('ok'));`).
+
 
 All notable changes to this project will be documented in this file.
 
