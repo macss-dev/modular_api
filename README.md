@@ -26,7 +26,10 @@ add CORS / API Key middlewares, and expose Swagger / OpenAPI documentation.
    - The server registers a simple health check endpoint at `GET /health` which responds with
      200 OK and body `ok`. This is implemented in `modular_api.dart` as:
      `_root.get('/health', (Request request) => Response.ok('ok'));`
-- ⚙️ Utilities: `Env.getString`, `Env.getInt`, `Env.setString` (.env support via dotenv).
+ - ⚙️ Utilities: `Env.getString`, `Env.getInt`, `Env.setString` (.env support via dotenv).
+  - `Env` behavior: if a `.env` file is not present the library will read values from
+    `Platform.environment`; if a requested key is missing from both sources an
+    `EnvKeyNotFoundException` is thrown.
 - 🧪 Example project and tests included in `example/` and `test/`.
 
 - 🗄️ ODBC database client: a minimal ODBC `DbClient` implementation (DSN-based) tested with Oracle and SQL Server — see `NOTICE` for provenance and details.

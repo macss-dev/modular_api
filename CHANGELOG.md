@@ -1,4 +1,9 @@
 # Changelog
+
+## [0.0.4] - 2025-10-23
+### Changed
+- `Env` behavior: when a `.env` file is not found the library reads values from `Platform.environment`. If a requested key is missing from both sources an `EnvKeyNotFoundException` is thrown.
+
 ## [0.0.3] - 2025-10-23
 ### Added
 - Automatic health endpoint: the server registers `GET /health` which responds with `ok` on startup. Implemented in `modular_api.dart` (exposes `_root.get('/health', (Request request) => Response.ok('ok'));`).

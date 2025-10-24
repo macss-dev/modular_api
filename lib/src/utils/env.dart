@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:dotenv/dotenv.dart';
 
 class EnvKeyNotFoundException implements Exception {
@@ -21,39 +20,54 @@ class EnvParseException implements Exception {
 }
 
 class Env {
-  static final DotEnv _env = DotEnv()..load();
+  static final DotEnv _env = DotEnv();
+  static bool _envLoaded = false;
 
-  /// get String value from .env file
-  /// Throws [EnvKeyNotFoundException] if the key does not exist.
-  static String getString(String key) {
-    final raw = _env[key];
-    if (raw == null) {
-      throw EnvKeyNotFoundException(key);
+  /// Initializes the environment; attempts to load `.env` if present.
+  static void init() {
+    final envFile = File('${Directory.current.path}/.env');
+    if (envFile.existsSync()) {
+      _env.load();
+      _envLoaded = true;
+    } else {
+      stdout.writeln('[Env] .env file not found, falling back to Platform.environment');
     }
+  }
+
+  static String _getRaw(String key) {
+    // Intentar leer desde .env si fue cargado
+    if (_envLoaded) {
+      final raw = _env[key];
+      if (raw != null) return raw;
+    }
+
+    // Intentar leer desde variables del sistema
+    final envValue = Platform.environment[key];
+    if (envValue != null) return envValue;
+
+    // Si no se encontró en ninguna fuente, lanzar excepción
+    throw EnvKeyNotFoundException(key);
+  }
+
+  static String getString(String key) {
+    final raw = _getRaw(key);
     var value = raw;
-    // Only remove quotes if they are at the start and end
     if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
       value = value.substring(1, value.length - 1);
     }
     return value;
   }
 
-  /// get int value from .env file
-  /// Throws [EnvKeyNotFoundException] if the key does not exist.
-  /// Throws [EnvParseException] if the value cannot be parsed to int.
   static int getInt(String key) {
-    final raw = _env[key];
-    if (raw == null) {
-      throw EnvKeyNotFoundException(key);
-    }
+    final raw = _getRaw(key);
     final parsed = int.tryParse(raw);
     if (parsed == null) {
       throw EnvParseException(key, raw);
     }
     return parsed;
   }
-
-  /// set String value in .env file
+  
+  @Deprecated('Avoid using this method as it may lead to unexpected behavior.')
   static Future<void> setString(String key, String value) async {
     final envFile = '${Directory.current.path}/.env';
     final file = File(envFile);
