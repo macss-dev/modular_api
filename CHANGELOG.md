@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.0.6] - 2025-10-30
+### Added
+- Exported `useCaseTestHandler` in main library export (`lib/modular_api.dart`) for convenient unit testing of UseCases without starting an HTTP server.
+- Comprehensive documentation guides:
+  - **AGENTS.md** — Framework overview and implementation guide optimized for AI assistants
+  - **docs/USECASE_DTO_GUIDE.md** — Complete guide for creating Input/Output DTOs with type mapping reference and advanced examples
+  - **docs/usecase_implementation.md** — Step-by-step guide for implementing UseCases with validation, database access, and repository patterns
+  - **docs/TESTING_GUIDE.md** — Quick reference for testing UseCases using `useCaseTestHandler`
+- Complete test suite for template project:
+  - `template/test/module1/hello_world_test.dart` — 5 tests for HelloWorld use case
+  - `template/test/module2/sum_case_test.dart` — 7 tests for SumCase use case
+  - `template/test/module2/upper_case_test.dart` — 7 tests for UpperCase use case
+  - `template/test/module3/lower_case_test.dart` — 7 tests for LowerCase use case
+  - `template/test/module3/multiply_case_test.dart` — 9 tests for MultiplyCase use case
+  - All 35 tests demonstrate proper usage of `useCaseTestHandler` with success and failure scenarios
+
 ## [0.0.5] - 2025-10-25
 ### Changed
 - `Env` now initializes automatically on first access (lazy singleton pattern). No need to call `Env.init()` explicitly, though it remains available for manual initialization if needed.

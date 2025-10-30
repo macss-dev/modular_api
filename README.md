@@ -8,6 +8,53 @@ add CORS / API Key middlewares, and expose Swagger / OpenAPI documentation.
 
 > Designed for the MACSS ecosystem — modular, explicit and testable server code.
 
+## 🚀 Quick start
+
+This quick start mirrors the included example implementation (`example/example.dart`).
+
+```dart
+import 'package:modular_api/modular_api.dart';
+
+Future<void> main(List<String> args) async {
+  final api = ModularApi(basePath: '/api');
+
+  // POST api/module1/hello-world
+  api.module('module1', (m) {
+    m.usecase('hello-world', HelloWorld.fromJson);
+  });
+
+  final port = 8080;
+  await api.serve(port: port,);
+
+  print('Docs on http://localhost:$port/docs');
+}
+```
+
+Example request (example server registers `/api/module1/hello-world` as a POST):
+
+```bash
+curl -H "Content-Type: application/json" -d '{"word":"world"}' \
+  -H "x-api-key: SECRET" \
+  "http://localhost:8080/api/module1/hello-world"
+```
+
+Example response (HelloOutput):
+
+```json
+{"output":"Hello, world!"}
+```
+
+---
+
+## 📖 Documentation
+
+Comprehensive guides are available in the repository:
+
+- **[AGENTS.md](AGENTS.md)** — Framework overview and implementation guide (optimized for AI assistants)
+- **[docs/usecase_dto_guide.md](docs/usecase_dto_guide.md)** — Complete guide for creating Input/Output DTOs
+- **[docs/usecase_implementation.md](docs/usecase_implementation.md)** — Step-by-step guide for implementing UseCases
+- **[docs/testing_guide.md](docs/testing_guide.md)** — Quick reference for testing with `useCaseTestHandler`
+
 ---
 
 ## ✨ Features
@@ -63,7 +110,7 @@ In `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  modular_api: ^0.0.5
+  modular_api: ^0.0.6
 ```
 
 Or from the command line:
@@ -71,44 +118,6 @@ Or from the command line:
 ```powershell
 dart pub add modular_api
 dart pub get
-```
-
----
-
-## 🚀 Quick start
-
-This quick start mirrors the included example implementation (`example/example.dart`).
-
-```dart
-import 'package:modular_api/modular_api.dart';
-
-Future<void> main(List<String> args) async {
-  final api = ModularApi(basePath: '/api');
-
-  // POST api/module1/hello-world
-  api.module('module1', (m) {
-    m.usecase('hello-world', HelloWorld.fromJson);
-  });
-
-  final port = 8080;
-  await api.serve(port: port,);
-
-  print('Docs on http://localhost:$port/docs');
-}
-```
-
-Example request (example server registers `/api/module1/hello-world` as a POST):
-
-```bash
-curl -H "Content-Type: application/json" -d '{"word":"world"}' \
-  -H "x-api-key: SECRET" \
-  "http://localhost:8080/api/module1/hello-world"
-```
-
-Example response (HelloOutput):
-
-```json
-{"output":"Hello, world!"}
 ```
 
 ---

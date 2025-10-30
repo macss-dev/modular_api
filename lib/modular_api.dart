@@ -8,6 +8,7 @@ library;
 // Core
 export 'src/core/modular_api.dart' show ModularApi, ModuleBuilder;
 export 'src/core/usecase/usecase.dart' show UseCase, Input, Output;
+export 'src/core/usecase/usecase_test_handler.dart' show useCaseTestHandler;
 
 // Middlewares
 export 'src/middlewares/cors.dart' show exampleCorsMiddleware;
