@@ -5,6 +5,8 @@ import 'package:example/modules/module2/module2_builder.dart';
 import 'package:example/modules/module3/module3_builder.dart';
 
 Future<void> main(List<String> args) async {
+  // Load environment variables
+  // require the .env file in the project root or set system environment variables
   final port = Env.getInt('PORT');
 
   final api = ModularApi(basePath: '/api');

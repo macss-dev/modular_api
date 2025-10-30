@@ -20,3 +20,6 @@ coverage/
 
 # Built files
 build/
+
+# .env
+.env

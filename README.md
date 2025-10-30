@@ -63,7 +63,7 @@ In `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  modular_api: ^0.0.3
+  modular_api: ^0.0.5
 ```
 
 Or from the command line:

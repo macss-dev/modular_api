@@ -5,10 +5,15 @@ Future<void> main(List<String> args) async {
 
   // POST api/module1/hello-world
   api.module('module1', (m) {
-    m.usecase('hello-world', HelloWorld.fromJson);
+    m.usecase('hello-world', HelloWorld.factory);
   });
 
-  final port = 1234;
+  /// Get the port from the environment (.env) file.
+  /// No default is provided; the PORT environment variable must be set.
+  /// try final port = 1234 to use a fixed port.
+  final port = Env.getInt('PORT');
+
+  /// Start the server
   await api.serve(
     port: port,
   );
@@ -72,7 +77,8 @@ class HelloWorld implements UseCase<HelloInput, HelloOutput> {
     output = HelloOutput();
   }
 
-  factory HelloWorld.fromJson(Map<String, dynamic> json) {
+  /// Factory method to create HelloWorld from JSON input.
+  factory HelloWorld.factory(Map<String, dynamic> json) {
     final uc = HelloWorld(input: HelloInput.fromJson(json));
     return uc;
   }

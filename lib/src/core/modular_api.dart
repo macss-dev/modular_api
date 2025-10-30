@@ -92,6 +92,15 @@ class ModuleBuilder {
     String? description,
   }) {
     final Handler h = useCaseHttpHandler(usecaseFactory);
+
+    /// Clean usecase name
+    usecaseName = usecaseName.trim();
+
+    /// if starts with '/', remove it
+    if (usecaseName.startsWith('/')) {
+      usecaseName = usecaseName.substring(1);
+    }
+
     final String subPath = '/$usecaseName';
     final String methodU = method.toUpperCase();
 

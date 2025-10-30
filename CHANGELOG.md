@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.5] - 2025-10-25
+### Changed
+- `Env` now initializes automatically on first access (lazy singleton pattern). No need to call `Env.init()` explicitly, though it remains available for manual initialization if needed.
+- .usecase() now trims leading slashes from usecase names to prevent double slashes in registered paths.
+
 ## [0.0.4] - 2025-10-23
 ### Changed
 - `Env` behavior: when a `.env` file is not found the library reads values from `Platform.environment`. If a requested key is missing from both sources an `EnvKeyNotFoundException` is thrown.

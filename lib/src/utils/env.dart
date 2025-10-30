@@ -24,7 +24,10 @@ class Env {
   static bool _envLoaded = false;
 
   /// Initializes the environment; attempts to load `.env` if present.
+  /// This is called automatically on first access, but can be called explicitly if needed.
   static void init() {
+    if (_envLoaded) return;
+
     final envFile = File('${Directory.current.path}/.env');
     if (envFile.existsSync()) {
       _env.load();
@@ -32,21 +35,27 @@ class Env {
     } else {
       stdout.writeln(
           '[Env] .env file not found, falling back to Platform.environment');
+      _envLoaded = true; // Mark as loaded to avoid re-checking
     }
   }
 
   static String _getRaw(String key) {
-    // Intentar leer desde .env si fue cargado
+    // Initialize if not already done
+    if (!_envLoaded) {
+      init();
+    }
+
+    // Try reading from .env if it was loaded
     if (_envLoaded) {
       final raw = _env[key];
       if (raw != null) return raw;
     }
 
-    // Intentar leer desde variables del sistema
+    // Try reading from system environment variables
     final envValue = Platform.environment[key];
     if (envValue != null) return envValue;
 
-    // Si no se encontró en ninguna fuente, lanzar excepción
+    // If not found in any source, throw exception
     throw EnvKeyNotFoundException(key);
   }
 
