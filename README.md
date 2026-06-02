@@ -20,7 +20,7 @@ modular_api/
     py/          -> PyPI: macss-modular-api
     docs-ui/     -> npm: @macss/docs-ui
     tests/       -> cross-language parity tests
-  docs/          -> architecture, roadmap, design analysis
+  docs/          -> public product and SDK documentation
   README.md
 ```
 
@@ -155,7 +155,6 @@ See `code/dart/example/`, `code/ts/example/`, and `code/py/example/` for complet
 - [docs/architecture.md](docs/architecture.md) - canonical architecture specification
 - [docs/plugin_host_guide.md](docs/plugin_host_guide.md) - current public plugin-host and authoring guide
 - [docs/roadmap.md](docs/roadmap.md) - product roadmap focused on the API and plugin milestones
-- [docs/plugin_architecture_analysis.md](docs/plugin_architecture_analysis.md) - current design analysis for the plugin ecosystem
 
 ---
 

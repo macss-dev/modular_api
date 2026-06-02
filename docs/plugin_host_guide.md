@@ -224,6 +224,4 @@ Optional hooks:
 ## Related Docs
 
 - [docs/architecture.md](docs/architecture.md) - target architecture
-- [docs/qa/stage-04.md](docs/qa/stage-04.md) - middleware-slot and request-context QA evidence
-- [docs/qa/stage-02.md](docs/qa/stage-02.md) - lifecycle QA evidence
-- [docs/qa/stage-08.md](docs/qa/stage-08.md) - official operational plugin migration QA
+- [docs/roadmap.md](docs/roadmap.md) - product roadmap and next milestones
