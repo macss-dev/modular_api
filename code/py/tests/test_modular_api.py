@@ -151,7 +151,7 @@ class TestModularApiMetrics:
 
 
 class TestAutoMountedEndpoints:
-    """serve() auto-mounts /health, /openapi.json, /openapi.yaml."""
+    """build() auto-mounts operational endpoints under the shared base_path."""
 
     def _build_client(self, **api_options: object) -> TestClient:
         api = _make_api(**api_options)
@@ -161,7 +161,7 @@ class TestAutoMountedEndpoints:
 
     def test_health_endpoint_returns_ietf_response(self) -> None:
         client = self._build_client()
-        response = client.get("/health")
+        response = client.get("/api/health")
         assert response.status_code == 200
         assert "application/health+json" in response.headers["content-type"]
         body = response.json()
@@ -169,7 +169,7 @@ class TestAutoMountedEndpoints:
 
     def test_openapi_json_returns_spec(self) -> None:
         client = self._build_client()
-        response = client.get("/openapi.json")
+        response = client.get("/api/openapi.json")
         assert response.status_code == 200
         assert "application/json" in response.headers["content-type"]
         spec = response.json()
@@ -178,20 +178,20 @@ class TestAutoMountedEndpoints:
 
     def test_openapi_yaml_returns_spec(self) -> None:
         client = self._build_client()
-        response = client.get("/openapi.yaml")
+        response = client.get("/api/openapi.yaml")
         assert response.status_code == 200
         assert "application/x-yaml" in response.headers["content-type"]
         assert "openapi: 3.0.0" in response.text
 
     def test_metrics_endpoint_when_enabled(self) -> None:
         client = self._build_client(metrics_enabled=True)
-        response = client.get("/metrics")
+        response = client.get("/api/metrics")
         assert response.status_code == 200
         assert "text/plain" in response.headers["content-type"]
 
     def test_metrics_endpoint_404_when_disabled(self) -> None:
         client = self._build_client(metrics_enabled=False)
-        response = client.get("/metrics")
+        response = client.get("/api/metrics")
         assert response.status_code == 404
 
     def test_use_case_endpoint_works(self) -> None:
@@ -202,7 +202,7 @@ class TestAutoMountedEndpoints:
 
     def test_docs_endpoint_returns_swagger_ui_html(self) -> None:
         client = self._build_client()
-        response = client.get("/docs")
+        response = client.get("/api/docs")
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
         assert "@macss/docs-ui" in response.text
@@ -223,7 +223,7 @@ class TestCustomServers:
 
     def test_uses_localhost_default_when_servers_not_provided(self) -> None:
         client = self._build_client()
-        spec = client.get("/openapi.json").json()
+        spec = client.get("/api/openapi.json").json()
         assert len(spec["servers"]) == 1
         assert "localhost" in spec["servers"][0]["url"]
 
@@ -231,7 +231,7 @@ class TestCustomServers:
         client = self._build_client(
             servers=[{"url": "https://miapi.example.com", "description": "Production"}],
         )
-        spec = client.get("/openapi.json").json()
+        spec = client.get("/api/openapi.json").json()
         assert len(spec["servers"]) == 1
         assert spec["servers"][0]["url"] == "https://miapi.example.com"
         assert spec["servers"][0]["description"] == "Production"
@@ -243,7 +243,7 @@ class TestCustomServers:
                 {"url": "http://192.168.5.82:8080", "description": "LAN"},
             ],
         )
-        spec = client.get("/openapi.json").json()
+        spec = client.get("/api/openapi.json").json()
         assert len(spec["servers"]) == 2
         assert spec["servers"][0]["url"] == "https://prod.example.com"
         assert spec["servers"][1]["url"] == "http://192.168.5.82:8080"
@@ -252,7 +252,7 @@ class TestCustomServers:
         client = self._build_client(
             servers=[{"url": "https://api.example.com", "description": "Main API"}],
         )
-        spec = client.get("/openapi.json").json()
+        spec = client.get("/api/openapi.json").json()
         assert spec["servers"][0]["description"] == "Main API"
 
 
@@ -277,7 +277,7 @@ class TestMiddlewarePipelineOrder:
         api.add_health_check(_AlwaysHealthyCheck())
         client = TestClient(api.build())
 
-        response = client.get("/health")
+        response = client.get("/api/health")
         body = response.json()
         assert body["status"] == "pass"
         assert "always-healthy" in body.get("checks", {})

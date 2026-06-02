@@ -79,17 +79,17 @@ void main() {
       return server;
     }
 
-    test('metrics disabled by default — /metrics returns 404', () async {
+    test('metrics disabled by default — /api/metrics returns 404', () async {
       await startServer(metricsEnabled: false);
-      final response = await http.get(Uri.parse('$baseUrl/metrics'));
+      final response = await http.get(Uri.parse('$baseUrl/api/metrics'));
       expect(response.statusCode, equals(404));
     });
 
     test(
-        'metrics enabled — GET /metrics returns 200 with prometheus content type',
+        'metrics enabled — GET /api/metrics returns 200 with prometheus content type',
         () async {
       await startServer(metricsEnabled: true);
-      final response = await http.get(Uri.parse('$baseUrl/metrics'));
+      final response = await http.get(Uri.parse('$baseUrl/api/metrics'));
       expect(response.statusCode, equals(200));
       expect(
         response.headers['content-type'],
@@ -109,7 +109,7 @@ void main() {
       );
 
       // Check metrics endpoint
-      final metricsResponse = await http.get(Uri.parse('$baseUrl/metrics'));
+      final metricsResponse = await http.get(Uri.parse('$baseUrl/api/metrics'));
       final body = metricsResponse.body;
 
       expect(body, contains('http_requests_total'));
@@ -119,21 +119,21 @@ void main() {
       expect(body, contains('http_request_duration_seconds'));
     });
 
-    test('metrics enabled — /health and /docs not instrumented', () async {
+    test('metrics enabled — /api/health and /api/docs are not instrumented', () async {
       await startServer(metricsEnabled: true);
 
       // Hit health and docs
-      await http.get(Uri.parse('$baseUrl/health'));
-      await http.get(Uri.parse('$baseUrl/docs'));
+      await http.get(Uri.parse('$baseUrl/api/health'));
+      await http.get(Uri.parse('$baseUrl/api/docs'));
 
       // Metrics should not contain health or docs routes
-      final metricsResponse = await http.get(Uri.parse('$baseUrl/metrics'));
+      final metricsResponse = await http.get(Uri.parse('$baseUrl/api/metrics'));
       final body = metricsResponse.body;
 
       // Only process_start_time_seconds should be present
       // No http_requests_total lines (since only excluded routes were hit)
-      expect(body, isNot(contains('route="/health"')));
-      expect(body, isNot(contains('route="/docs"')));
+      expect(body, isNot(contains('route="/api/health"')));
+      expect(body, isNot(contains('route="/api/docs"')));
     });
 
     test('metrics getter returns MetricsRegistrar when enabled', () async {
@@ -150,7 +150,7 @@ void main() {
       expect(api.metrics, isNull);
     });
 
-    test('custom metrics appear in /metrics output', () async {
+    test('custom metrics appear in /api/metrics output', () async {
       final api = ModularApi(
         basePath: '/api',
         version: '1.0.0',
@@ -171,7 +171,7 @@ void main() {
       server = await api.serve(port: 0);
       baseUrl = 'http://localhost:${server.port}';
 
-      final response = await http.get(Uri.parse('$baseUrl/metrics'));
+      final response = await http.get(Uri.parse('$baseUrl/api/metrics'));
       expect(response.body, contains('custom_operations_total'));
       expect(response.body, contains('type="test"'));
       expect(response.body, contains('42'));

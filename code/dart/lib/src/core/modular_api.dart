@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'package:modular_api/modular_api.dart';
+import 'package:modular_api/src/core/error_response_middleware.dart';
 import 'package:modular_api/src/core/logger/logging_middleware.dart';
 import 'package:modular_api/src/core/metrics/metric_registry.dart';
-import 'package:modular_api/src/core/metrics/metrics_middleware.dart';
+import 'package:modular_api/src/core/official_plugins.dart';
 import 'package:modular_api/src/core/usecase/usecase_http_handler.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -15,8 +16,10 @@ typedef UseCaseFactory = UseCase Function(Map<String, dynamic> json);
 class ModularApi {
   final Router _root = Router();
   final List<Middleware> _middlewares = [];
+  final List<Plugin> _plugins = [];
   final String basePath;
   final String title;
+  final String version;
   final HealthService _healthService;
 
   // ── Logger ──
@@ -56,7 +59,7 @@ class ModularApi {
   ModularApi({
     this.basePath = '/api',
     this.title = 'Modular API',
-    String version = 'x.y.z',
+    this.version = 'x.y.z',
     String? releaseId,
     this.servers,
     this.metricsEnabled = false,
@@ -115,28 +118,86 @@ class ModularApi {
     return this;
   }
 
+  ModularApi plugin(Plugin plugin) {
+    _plugins.add(plugin);
+    return this;
+  }
+
   Future<HttpServer> serve({
     InternetAddress? ip,
     required int port,
     Future<void> Function(Router root)? onBeforeServe,
   }) async {
-    _root.get('/health', healthHandler(_healthService));
+    final operationalPaths = operationalRoutePaths(
+      basePath: basePath,
+      metricsPath: metricsEnabled ? metricsPath : null,
+    );
+    final runtimePlugins = [
+      ..._plugins,
+      ...await buildRuntimePlugins(
+        basePath: basePath,
+        title: title,
+        port: port,
+        healthService: _healthService,
+        registeredPaths: apiRegistry.routes.map((route) => route.path).toList(),
+        servers: servers,
+        metricRegistry: _metricRegistry,
+        requestsTotal: _httpRequestsTotal,
+        requestsInFlight: _httpRequestsInFlight,
+        requestDuration: _httpRequestDuration,
+        metricsPath: metricsEnabled ? metricsPath : null,
+        excludedMetricsRoutes: _excludedMetricsRoutes,
+      ),
+    ];
 
-    // Mount /metrics endpoint if enabled.
-    if (metricsEnabled && _metricRegistry != null) {
-      _root.get(metricsPath, metricsHandler(_metricRegistry!));
+    final seenPluginIds = <String>{};
+    for (final plugin in runtimePlugins) {
+      if (!seenPluginIds.add(plugin.manifest.id)) {
+        throw PluginHostError(
+          'PLUGIN_ID_CONFLICT',
+          'Duplicate plugin id: ${plugin.manifest.id}',
+          resourceId: plugin.manifest.id,
+        );
+      }
     }
 
-    await OpenApi.init(
+    final orderedPlugins = orderPlugins(runtimePlugins);
+
+    final pluginHost = RuntimePluginHost(
+      basePath: basePath,
       title: title,
-      port: port,
-      servers: servers,
+      version: version,
     );
-    // Swagger UI docs — inline HTML, no external dependency (PRD-003).
-    _root.get('/docs', swaggerDocsHandler(title: title));
-    _root.get('/docs/', swaggerDocsHandler(title: title));
-    _root.get('/openapi.json', OpenApi.openapiJson);
-    _root.get('/openapi.yaml', OpenApi.openapiYaml);
+
+    try {
+      for (final plugin in orderedPlugins) {
+        pluginHost.beginPluginSetup(plugin.manifest.id);
+        try {
+          plugin.setup(pluginHost);
+        } finally {
+          pluginHost.endPluginSetup();
+        }
+        if (plugin is ShutdownAwarePlugin) {
+          final shutdownAwarePlugin = plugin as ShutdownAwarePlugin;
+          pluginHost.onShutdown(() => shutdownAwarePlugin.shutdown());
+        }
+      }
+
+      pluginHost.freeze();
+      final validationResults = <PluginValidationResult>[];
+      for (final plugin in orderedPlugins) {
+        if (plugin is ValidatingPlugin) {
+          final validatingPlugin = plugin as ValidatingPlugin;
+          validationResults.addAll(validatingPlugin.validate(pluginHost));
+        }
+      }
+      pluginHost.assertValid(validationResults);
+    } catch (_) {
+      await pluginHost.shutdown();
+      rethrow;
+    }
+
+    pluginHost.applyRoutes(_root);
 
     if (onBeforeServe != null) {
       await onBeforeServe(_root);
@@ -150,28 +211,31 @@ class ModularApi {
       loggingMiddleware(
         logLevel: logLevel,
         serviceName: title,
-        excludedRoutes: ['/health', metricsPath, '/docs', '/docs/'],
+        excludedRoutes: [
+          operationalPaths.healthPath,
+          operationalPaths.docsPath,
+          operationalPaths.openApiJsonPath,
+          operationalPaths.openApiYamlPath,
+          if (operationalPaths.metricsPath != null) operationalPaths.metricsPath!,
+        ],
       ),
     );
+    pipeline = pipeline.addMiddleware(errorResponseMiddleware());
 
-    // Metrics middleware second to capture request lifecycle.
-    if (metricsEnabled &&
-        _httpRequestsTotal != null &&
-        _httpRequestsInFlight != null &&
-        _httpRequestDuration != null) {
-      pipeline = pipeline.addMiddleware(
-        metricsMiddleware(
-          requestsTotal: _httpRequestsTotal!,
-          requestsInFlight: _httpRequestsInFlight!,
-          requestDuration: _httpRequestDuration!,
-          excludedRoutes: _excludedMetricsRoutes,
-          registeredPaths: apiRegistry.routes.map((r) => r.path).toList(),
-        ),
-      );
+    for (final middleware in pluginHost.middlewaresForSlot('preRouting')) {
+      pipeline = pipeline.addMiddleware(middleware.handler);
     }
 
     for (final m in _middlewares) {
       pipeline = pipeline.addMiddleware(m);
+    }
+
+    for (final middleware in pluginHost.middlewaresForSlot('preHandler')) {
+      pipeline = pipeline.addMiddleware(middleware.handler);
+    }
+
+    for (final middleware in pluginHost.middlewaresForSlot('postHandler')) {
+      pipeline = pipeline.addMiddleware(middleware.handler);
     }
 
     final handler = pipeline.addHandler(_root.call);
@@ -180,19 +244,44 @@ class ModularApi {
       ip ?? InternetAddress.anyIPv4,
       port,
     );
+    final managedServer = _ManagedHttpServer(server, pluginHost.shutdown);
 
     /// Print info
-    stdout.writeln('Docs on http://localhost:$port/docs');
-    stdout.writeln('Health on http://localhost:$port/health');
-    stdout.writeln('OpenAPI JSON on http://localhost:$port/openapi.json');
-    stdout.writeln('OpenAPI YAML on http://localhost:$port/openapi.yaml');
-    if (metricsEnabled) {
-      stdout.writeln('Metrics on http://localhost:$port$metricsPath');
+    stdout.writeln('Docs on http://localhost:${managedServer.port}${operationalPaths.docsPath}');
+    stdout.writeln('Health on http://localhost:${managedServer.port}${operationalPaths.healthPath}');
+    stdout.writeln('OpenAPI JSON on http://localhost:${managedServer.port}${operationalPaths.openApiJsonPath}');
+    stdout.writeln('OpenAPI YAML on http://localhost:${managedServer.port}${operationalPaths.openApiYamlPath}');
+    if (operationalPaths.metricsPath != null) {
+      stdout.writeln('Metrics on http://localhost:${managedServer.port}${operationalPaths.metricsPath}');
     }
 
     /// Return server
-    return server;
+    return managedServer;
   }
+}
+
+class _ManagedHttpServer implements HttpServer {
+  final HttpServer _delegate;
+  final Future<void> Function() _onClose;
+  bool _closed = false;
+
+  _ManagedHttpServer(this._delegate, this._onClose);
+
+  @override
+  int get port => _delegate.port;
+
+  @override
+  Future<HttpServer> close({bool force = false}) async {
+    await _delegate.close(force: force);
+    if (!_closed) {
+      _closed = true;
+      await _onClose();
+    }
+    return this;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class ModuleBuilder {

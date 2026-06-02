@@ -133,7 +133,7 @@ void main() {
 
     test('OpenAPI spec contains example on input schema', () async {
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
       final spec = jsonDecode(resp.body) as Map<String, dynamic>;
       final schemas = (spec['components'] as Map)['schemas'] as Map;
       final inputSchema = schemas['greetings_hello_Input'] as Map;
@@ -149,7 +149,7 @@ void main() {
 
     test('OpenAPI spec contains example on output schema', () async {
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
       final spec = jsonDecode(resp.body) as Map<String, dynamic>;
       final schemas = (spec['components'] as Map)['schemas'] as Map;
       final outputSchema = schemas['greetings_hello_Output'] as Map;
@@ -161,7 +161,7 @@ void main() {
 
     test('OpenAPI schema has correct types for all fields', () async {
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
       final spec = jsonDecode(resp.body) as Map<String, dynamic>;
       final schemas = (spec['components'] as Map)['schemas'] as Map;
       final props =
@@ -180,7 +180,7 @@ void main() {
       // If OpenAPI tried factory({}) it would throw TypeError.
       // Test passing proves schema came from the example instance.
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
       final spec = jsonDecode(resp.body) as Map<String, dynamic>;
       final schemas = (spec['components'] as Map)['schemas'] as Map;
 

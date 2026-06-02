@@ -122,6 +122,7 @@ class RequestScopedLogger:
         route: str,
         status_code: int,
         duration_ms: float,
+        extra: dict[str, object] | None = None,
     ) -> None:
         """Emit a 'request completed' log at the level determined by status_code."""
         self._log(
@@ -132,6 +133,7 @@ class RequestScopedLogger:
                 "route": route,
                 "status": status_code,
                 "duration_ms": duration_ms,
+                **(extra or {}),
             },
         )
 

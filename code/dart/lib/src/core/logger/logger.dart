@@ -105,6 +105,7 @@ class RequestScopedLogger implements ModularLogger {
     required String route,
     required int statusCode,
     required double durationMs,
+    Map<String, dynamic>? extra,
   }) {
     _log(
       _levelForStatus(statusCode),
@@ -114,6 +115,7 @@ class RequestScopedLogger implements ModularLogger {
         'route': route,
         'status': statusCode,
         'duration_ms': durationMs,
+        ...?extra,
       },
     );
   }

@@ -19,6 +19,28 @@ export { InputValidationError } from './core/input_validation_error';
 // Main orchestrator
 export { ModularApi } from './core/modular_api';
 export type { ModularApiOptions } from './core/modular_api';
+export { HOST_API_VERSION, PluginHostError } from './core/plugin';
+export type {
+  Capability,
+  CapabilityHandle,
+  HostMetadata,
+  HttpMethod,
+  MiddlewareSlot,
+  ModuleExtensionContribution,
+  ModuleExtensionPoint,
+  Plugin,
+  PluginHost,
+  PluginManifest,
+  PluginMiddleware,
+  PluginRequestContext,
+  PluginRequirement,
+  PluginResponse,
+  PluginRoute,
+  PluginRouteVisibility,
+  PluginValidationResult,
+  RegisteredModuleView,
+  RegisteredUseCaseView,
+} from './core/plugin';
 
 // Module builder (exposed for advanced / manual usage)
 export { ModuleBuilder } from './core/module_builder';

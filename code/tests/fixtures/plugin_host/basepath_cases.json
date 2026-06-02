@@ -1,0 +1,28 @@
+{
+  "cases": [
+    {
+      "name": "root-basepath",
+      "basePath": "/",
+      "expectedPluginRoutes": [
+        "/health",
+        "/metrics",
+        "/openapi.json",
+        "/openapi.yaml",
+        "/docs",
+        "/graphql"
+      ]
+    },
+    {
+      "name": "api-basepath",
+      "basePath": "/api",
+      "expectedPluginRoutes": [
+        "/api/health",
+        "/api/metrics",
+        "/api/openapi.json",
+        "/api/openapi.yaml",
+        "/api/docs",
+        "/api/graphql"
+      ]
+    }
+  ]
+}

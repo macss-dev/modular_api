@@ -77,15 +77,15 @@ describe('ModularApi metrics integration', () => {
     return server;
   }
 
-  it('metrics disabled by default — /metrics returns 404', async () => {
+  it('metrics disabled by default — /api/metrics returns 404', async () => {
     const srv = await startServer({ metricsEnabled: false });
-    const res = await request(srv).get('/metrics');
+    const res = await request(srv).get('/api/metrics');
     expect(res.status).toBe(404);
   });
 
-  it('metrics enabled — GET /metrics returns 200 with prometheus content type', async () => {
+  it('metrics enabled — GET /api/metrics returns 200 with prometheus content type', async () => {
     const srv = await startServer({ metricsEnabled: true });
-    const res = await request(srv).get('/metrics');
+    const res = await request(srv).get('/api/metrics');
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('text/plain');
     expect(res.text).toContain('process_start_time_seconds');
@@ -98,7 +98,7 @@ describe('ModularApi metrics integration', () => {
     await request(srv).post('/api/test/ping').send({}).set('Content-Type', 'application/json');
 
     // Check metrics
-    const res = await request(srv).get('/metrics');
+    const res = await request(srv).get('/api/metrics');
     expect(res.text).toContain('http_requests_total');
     expect(res.text).toContain('method="POST"');
     expect(res.text).toContain('status_code="200"');
@@ -106,15 +106,15 @@ describe('ModularApi metrics integration', () => {
     expect(res.text).toContain('http_request_duration_seconds');
   });
 
-  it('metrics enabled — /health and /docs not instrumented', async () => {
+  it('metrics enabled — /api/health and /api/docs are not instrumented', async () => {
     const srv = await startServer({ metricsEnabled: true });
 
-    await request(srv).get('/health');
-    await request(srv).get('/docs');
+    await request(srv).get('/api/health');
+    await request(srv).get('/api/docs');
 
-    const res = await request(srv).get('/metrics');
-    expect(res.text).not.toContain('route="/health"');
-    expect(res.text).not.toContain('route="/docs"');
+    const res = await request(srv).get('/api/metrics');
+    expect(res.text).not.toContain('route="/api/health"');
+    expect(res.text).not.toContain('route="/api/docs"');
   });
 
   it('metrics getter returns MetricsRegistrar when enabled', () => {
@@ -131,7 +131,7 @@ describe('ModularApi metrics integration', () => {
     expect(api.metrics).toBeUndefined();
   });
 
-  it('custom metrics appear in /metrics output', async () => {
+  it('custom metrics appear in /api/metrics output', async () => {
     const api = new ModularApi({
       basePath: '/api',
       version: '1.0.0',
@@ -151,7 +151,7 @@ describe('ModularApi metrics integration', () => {
 
     server = await api.serve({ port: 0 });
 
-    const res = await request(server).get('/metrics');
+    const res = await request(server).get('/api/metrics');
     expect(res.text).toContain('custom_operations_total');
     expect(res.text).toContain('type="test"');
     expect(res.text).toContain('42');

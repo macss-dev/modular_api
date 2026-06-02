@@ -150,19 +150,19 @@ describe('OpenAPI spec endpoints (TypeScript)', () => {
     return server;
   }
 
-  describe('GET /openapi.json', () => {
+  describe('GET /api/openapi.json', () => {
     beforeEach(async () => {
       await startServer();
     });
 
     it('returns 200 with application/json content-type', async () => {
-      const res = await request(server).get('/openapi.json');
+      const res = await request(server).get('/api/openapi.json');
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toContain('application/json');
     });
 
     it('returns valid OpenAPI spec with correct structure', async () => {
-      const res = await request(server).get('/openapi.json');
+      const res = await request(server).get('/api/openapi.json');
       const spec = res.body;
       expect(spec.openapi).toBe('3.0.0');
       expect(spec.info).toBeDefined();
@@ -171,48 +171,48 @@ describe('OpenAPI spec endpoints (TypeScript)', () => {
     });
 
     it('contains registered use case path', async () => {
-      const res = await request(server).get('/openapi.json');
+      const res = await request(server).get('/api/openapi.json');
       const spec = res.body;
       expect(spec.paths).toHaveProperty('/api/test/ping');
     });
 
     it('spec has servers entry', async () => {
-      const res = await request(server).get('/openapi.json');
+      const res = await request(server).get('/api/openapi.json');
       const spec = res.body;
       expect(Array.isArray(spec.servers)).toBe(true);
       expect(spec.servers.length).toBeGreaterThan(0);
     });
   });
 
-  describe('GET /openapi.yaml', () => {
+  describe('GET /api/openapi.yaml', () => {
     beforeEach(async () => {
       await startServer();
     });
 
     it('returns 200 with application/x-yaml content-type', async () => {
-      const res = await request(server).get('/openapi.yaml');
+      const res = await request(server).get('/api/openapi.yaml');
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toContain('application/x-yaml');
     });
 
     it('returns YAML with openapi version', async () => {
-      const res = await request(server).get('/openapi.yaml');
+      const res = await request(server).get('/api/openapi.yaml');
       expect(res.text).toContain('openapi: 3.0.0');
     });
 
     it('YAML contains registered use case path', async () => {
-      const res = await request(server).get('/openapi.yaml');
+      const res = await request(server).get('/api/openapi.yaml');
       expect(res.text).toContain('/api/test/ping');
     });
 
     it('YAML contains info section', async () => {
-      const res = await request(server).get('/openapi.yaml');
+      const res = await request(server).get('/api/openapi.yaml');
       expect(res.text).toContain('info:');
       expect(res.text).toContain('title: Test API');
     });
 
     it('YAML is not JSON (does not start with {)', async () => {
-      const res = await request(server).get('/openapi.yaml');
+      const res = await request(server).get('/api/openapi.yaml');
       expect(res.text.trimStart().startsWith('{')).toBe(false);
     });
   });
@@ -229,8 +229,8 @@ describe('OpenAPI spec endpoints (TypeScript)', () => {
       });
       server = await api.serve({ port: 0 });
 
-      const jsonRes = await request(server).get('/openapi.json');
-      const yamlRes = await request(server).get('/openapi.yaml');
+      const jsonRes = await request(server).get('/api/openapi.json');
+      const yamlRes = await request(server).get('/api/openapi.yaml');
 
       expect(jsonRes.status).toBe(200);
       expect(yamlRes.status).toBe(200);
@@ -257,7 +257,7 @@ describe('OpenAPI spec endpoints (TypeScript)', () => {
       });
       server = await api.serve({ port: 0 });
 
-      const res = await request(server).get('/openapi.json');
+      const res = await request(server).get('/api/openapi.json');
       expect(res.body.servers).toHaveLength(1);
       expect(res.body.servers[0].url).toContain('localhost');
     });
@@ -276,7 +276,7 @@ describe('OpenAPI spec endpoints (TypeScript)', () => {
       });
       server = await api.serve({ port: 0 });
 
-      const res = await request(server).get('/openapi.json');
+      const res = await request(server).get('/api/openapi.json');
       expect(res.body.servers).toHaveLength(1);
       expect(res.body.servers[0].url).toBe('https://miapi.example.com');
       expect(res.body.servers[0].description).toBe('Production');
@@ -297,7 +297,7 @@ describe('OpenAPI spec endpoints (TypeScript)', () => {
       });
       server = await api.serve({ port: 0 });
 
-      const res = await request(server).get('/openapi.json');
+      const res = await request(server).get('/api/openapi.json');
       expect(res.body.servers).toHaveLength(2);
       expect(res.body.servers[0].url).toBe('https://prod.example.com');
       expect(res.body.servers[1].url).toBe('http://192.168.5.82:8080');
@@ -317,7 +317,7 @@ describe('OpenAPI spec endpoints (TypeScript)', () => {
       });
       server = await api.serve({ port: 0 });
 
-      const res = await request(server).get('/openapi.json');
+      const res = await request(server).get('/api/openapi.json');
       expect(res.body.servers[0].description).toBe('Main API');
     });
   });

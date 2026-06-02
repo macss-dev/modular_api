@@ -28,19 +28,23 @@ _DOCS_UI_HTML_TEMPLATE = """\
   <body>
     <div id="swagger-ui"></div>
     <script src=""" + f'"{_DOCS_UI_CDN}/docs-ui.js"' + """></script>
-    <script>DocsUI.init({ specUrl: "/openapi.json" })</script>
+    <script>DocsUI.init({ specUrl: "{spec_url}" })</script>
   </body>
 </html>"""
 
 
-def swagger_docs_handler(*, title: str) -> object:
+def build_swagger_docs_html(*, title: str, spec_url: str = "/openapi.json") -> str:
+    return _DOCS_UI_HTML_TEMPLATE.replace("{title}", title).replace("{spec_url}", spec_url)
+
+
+def swagger_docs_handler(*, title: str, spec_url: str = "/openapi.json") -> object:
     """Return a Starlette endpoint that serves a docs-ui HTML page.
 
     Usage::
 
         Route("/docs", endpoint=swagger_docs_handler(title="My API"))
     """
-    html = _DOCS_UI_HTML_TEMPLATE.replace("{title}", title)
+    html = build_swagger_docs_html(title=title, spec_url=spec_url)
 
     async def _endpoint(request: Request) -> HTMLResponse:
         return HTMLResponse(html)

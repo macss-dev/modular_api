@@ -114,6 +114,7 @@ export class RequestScopedLogger implements ModularLogger {
     route: string;
     statusCode: number;
     durationMs: number;
+    extra?: Record<string, unknown>;
   }): void {
     this.log(RequestScopedLogger.levelForStatus(opts.statusCode), 'request completed', {
       extra: {
@@ -121,6 +122,7 @@ export class RequestScopedLogger implements ModularLogger {
         route: opts.route,
         status: opts.statusCode,
         duration_ms: opts.durationMs,
+        ...(opts.extra ?? {}),
       },
     });
   }

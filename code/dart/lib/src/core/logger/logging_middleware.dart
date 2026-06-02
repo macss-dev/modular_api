@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:shelf/shelf.dart';
+import '../request_pipeline_audit.dart';
 import 'logger.dart';
 import 'uuid.dart';
 
@@ -51,6 +52,7 @@ Middleware loggingMiddleware({
         serviceName: serviceName,
         sink: sink ?? stdout,
       );
+      final auditState = RequestPipelineAuditState();
 
       final method = request.method.toUpperCase();
       final route = path;
@@ -60,7 +62,11 @@ Middleware loggingMiddleware({
 
       // 4. Propagate logger via context
       final enrichedRequest = request.change(
-        context: {loggerContextKey: logger},
+        context: {
+          ...request.context,
+          loggerContextKey: logger,
+          requestPipelineAuditContextKey: auditState,
+        },
       );
 
       // 5. Execute the inner handler chain
@@ -77,6 +83,14 @@ Middleware loggingMiddleware({
           route: route,
           statusCode: response.statusCode,
           durationMs: durationMs,
+          extra: auditState.shortCircuit == null
+              ? null
+              : {
+                  'short_circuit': true,
+                  'short_circuit_plugin_id': auditState.shortCircuit!.pluginId,
+                  'short_circuit_middleware_id': auditState.shortCircuit!.middlewareId,
+                  'short_circuit_slot': auditState.shortCircuit!.slot,
+                },
         );
 
         // 7. Attach X-Request-ID to response

@@ -12,7 +12,7 @@
  *   curl http://localhost:8080/api/v1/time/current-time?tz=utc-5
  *
  * Docs:
- *   http://localhost:8080/docs
+ *   http://localhost:8080/api/v1/docs
  */
 
 import { ModularApi, LogLevel } from '../src/index';
@@ -39,7 +39,7 @@ const api = new ModularApi({
   logLevel: LogLevel.debug,
 });
 
-// Register health checks (optional — /health works without any checks)
+// Register health checks (optional — /api/v1/health works without any checks)
 api.addHealthCheck(new AlwaysPassHealthCheck());
 
 // Register a custom metric (optional).

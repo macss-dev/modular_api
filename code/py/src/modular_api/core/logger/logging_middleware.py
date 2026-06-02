@@ -24,6 +24,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from modular_api.core.logger.logger import LogLevel, RequestScopedLogger, WriteFn, _default_write
+from modular_api.core.request_pipeline_audit import ensure_request_pipeline_audit
 
 # Key used in request.state to propagate the logger downstream.
 LOGGER_STATE_KEY = "modular_logger"
@@ -58,6 +59,7 @@ def logging_middleware(
                 return
 
             request = Request(scope, receive, send)
+            audit_state = ensure_request_pipeline_audit(scope)
             path = request.url.path
 
             # Skip excluded routes.
@@ -111,6 +113,14 @@ def logging_middleware(
                     route=route,
                     status_code=status_code,
                     duration_ms=duration_ms,
+                    extra=None
+                    if audit_state.short_circuit is None
+                    else {
+                        "short_circuit": True,
+                        "short_circuit_plugin_id": audit_state.short_circuit.plugin_id,
+                        "short_circuit_middleware_id": audit_state.short_circuit.middleware_id,
+                        "short_circuit_slot": audit_state.short_circuit.slot,
+                    },
                 )
             except Exception:
                 duration_ms = (time.perf_counter() - start) * 1000

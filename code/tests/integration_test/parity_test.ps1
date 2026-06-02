@@ -33,6 +33,38 @@ $pyPort   = 8083
 # PowerShell profile configures proxy bypass but -NoProfile skips it.
 $env:NO_PROXY = 'localhost,127.0.0.1'
 
+# Current runtime topology:
+# - business and operational routes share the same API basePath
+# These helpers keep the parity suite aligned with that single source of truth.
+$script:ModuleBasePath = '/api/v1'
+$script:OperationalBasePath = $script:ModuleBasePath
+
+function Join-ApiPath {
+    param(
+        [string]$BasePath,
+        [string]$RelativePath
+    )
+
+    $normalizedBase = if ([string]::IsNullOrWhiteSpace($BasePath) -or $BasePath -eq '/') {
+        ''
+    } else {
+        '/' + $BasePath.Trim('/ ')
+    }
+
+    $normalizedRelative = '/' + $RelativePath.Trim('/ ')
+    return ($normalizedBase + $normalizedRelative) -replace '/{2,}', '/'
+}
+
+function Get-ModulePath {
+    param([string]$RelativePath)
+    return Join-ApiPath -BasePath $script:ModuleBasePath -RelativePath $RelativePath
+}
+
+function Get-OperationalPath {
+    param([string]$RelativePath)
+    return Join-ApiPath -BasePath $script:OperationalBasePath -RelativePath $RelativePath
+}
+
 # ── Colour helpers ───────────────────────────────────────────────────────────
 
 function Write-Pass  { param([string]$Msg) Write-Host "  [PASS] $Msg" -ForegroundColor Green }
@@ -77,7 +109,8 @@ function Start-ExampleServer {
         [string]$WorkDir,
         [string]$Command,
         [string[]]$Arguments,
-        [int]$Port
+        [int]$Port,
+        [hashtable]$Environment = @{}
     )
 
     Write-Host "  Starting $Name on port $Port..." -ForegroundColor Yellow
@@ -85,14 +118,22 @@ function Start-ExampleServer {
     $stdoutLog = Join-Path $env:TEMP "modular_parity_${Name}_stdout.log"
     $stderrLog = Join-Path $env:TEMP "modular_parity_${Name}_stderr.log"
 
-    $process = Start-Process -FilePath $Command `
-        -ArgumentList $Arguments `
-        -WorkingDirectory $WorkDir `
-        -NoNewWindow -PassThru `
-        -RedirectStandardOutput $stdoutLog `
-        -RedirectStandardError  $stderrLog
+    $startProcessArgs = @{
+        FilePath               = $Command
+        ArgumentList           = $Arguments
+        WorkingDirectory       = $WorkDir
+        NoNewWindow            = $true
+        PassThru               = $true
+        RedirectStandardOutput = $stdoutLog
+        RedirectStandardError  = $stderrLog
+    }
+    if ($Environment.Count -gt 0) {
+        $startProcessArgs.Environment = $Environment
+    }
 
-    $healthUrl = "http://127.0.0.1:$Port/health"
+    $process = Start-Process @startProcessArgs
+
+    $healthUrl = "http://127.0.0.1:$Port$(Get-OperationalPath '/health')"
 
     # Wait for the server to become healthy (max 30 s).
     $deadline  = (Get-Date).AddSeconds(30)
@@ -206,30 +247,32 @@ function Test-DocsEndpoint {
     #>
     param([string]$ImplName, [string]$BaseUrl)
 
-    $response = Invoke-Endpoint -Uri "$BaseUrl/docs"
+    $docsPath = Get-OperationalPath '/docs'
+    $openApiJsonPath = Get-OperationalPath '/openapi.json'
+    $response = Invoke-Endpoint -Uri "$BaseUrl$docsPath"
 
     Assert-True ($response.StatusCode -eq 200) `
-        "$ImplName /docs → 200"
+        "$ImplName $docsPath → 200"
 
     $contentType = "$($response.ContentType)"
     Assert-True ($contentType -match 'text/html') `
-        "$ImplName /docs Content-Type contains text/html"
+        "$ImplName $docsPath Content-Type contains text/html"
 
     $body = $response.Body
     Assert-True ($body -match '@macss/docs-ui') `
-        "$ImplName /docs body contains @macss/docs-ui CDN reference"
+        "$ImplName $docsPath body contains @macss/docs-ui CDN reference"
 
     Assert-True ($body -match 'DocsUI\.init') `
-        "$ImplName /docs body contains DocsUI.init bootloader"
+        "$ImplName $docsPath body contains DocsUI.init bootloader"
 
-    Assert-True ($body -match '/openapi\.json') `
-        "$ImplName /docs body points at /openapi.json"
+    Assert-True ($body -match [regex]::Escape($openApiJsonPath)) `
+        "$ImplName $docsPath body points at $openApiJsonPath"
 
     Assert-True ($body -match '<title>Modular API') `
-        "$ImplName /docs title is 'Modular API'"
+        "$ImplName $docsPath title is 'Modular API'"
 
     Assert-True ($body -notmatch 'scalar') `
-        "$ImplName /docs no Scalar regression (PRD-003)"
+        "$ImplName $docsPath no Scalar regression (PRD-003)"
 
     # PRD-004: dark mode CSS lives inside the docs-ui JS bundle (injected at
     # runtime via injectStyles).  Verifying '@macss/docs-ui' and 'DocsUI.init'
@@ -245,32 +288,33 @@ function Test-HealthEndpoint {
     #>
     param([string]$ImplName, [string]$BaseUrl)
 
-    $response = Invoke-Endpoint -Uri "$BaseUrl/health"
+    $healthPath = Get-OperationalPath '/health'
+    $response = Invoke-Endpoint -Uri "$BaseUrl$healthPath"
 
     Assert-True ($response.StatusCode -eq 200) `
-        "$ImplName /health → 200"
+        "$ImplName $healthPath → 200"
 
     $contentType = "$($response.ContentType)"
     Assert-True ($contentType -match 'application/health\+json') `
-        "$ImplName /health Content-Type is application/health+json"
+        "$ImplName $healthPath Content-Type is application/health+json"
 
     $bodyText = $response.Body
     $json = $bodyText | ConvertFrom-Json
 
     Assert-True ($json.status -eq 'pass') `
-        "$ImplName /health status is 'pass'"
+        "$ImplName $healthPath status is 'pass'"
 
     Assert-True ($json.version -eq '1.0.0') `
-        "$ImplName /health version is '1.0.0'"
+        "$ImplName $healthPath version is '1.0.0'"
 
     Assert-True ($json.releaseId -eq '1.0.0-debug') `
-        "$ImplName /health releaseId is '1.0.0-debug'"
+        "$ImplName $healthPath releaseId is '1.0.0-debug'"
 
     Assert-True ($null -ne $json.checks.example) `
-        "$ImplName /health checks contains 'example'"
+        "$ImplName $healthPath checks contains 'example'"
 
     Assert-True ($json.checks.example.status -eq 'pass') `
-        "$ImplName /health checks.example.status is 'pass'"
+        "$ImplName $healthPath checks.example.status is 'pass'"
 
     return $json
 }
@@ -283,28 +327,30 @@ function Test-MetricsEndpoint {
     param([string]$ImplName, [string]$BaseUrl)
 
     # Hit a use case first so metrics have at least one observation.
-    $null = Invoke-Endpoint -Uri "$BaseUrl/api/v1/greetings/hello-world" `
+    $helloPath = Get-ModulePath '/greetings/hello-world'
+    $metricsPath = Get-OperationalPath '/metrics'
+    $null = Invoke-Endpoint -Uri "$BaseUrl$helloPath" `
         -Method POST -Body '{"name":"MetricsWarmup"}'
 
-    $response = Invoke-Endpoint -Uri "$BaseUrl/metrics"
+    $response = Invoke-Endpoint -Uri "$BaseUrl$metricsPath"
 
     Assert-True ($response.StatusCode -eq 200) `
-        "$ImplName /metrics → 200"
+        "$ImplName $metricsPath → 200"
 
     $contentType = "$($response.ContentType)"
     Assert-True ($contentType -match 'text/plain') `
-        "$ImplName /metrics Content-Type contains text/plain"
+        "$ImplName $metricsPath Content-Type contains text/plain"
 
     $body = $response.Body
 
     Assert-True ($body -match 'http_requests_total') `
-        "$ImplName /metrics contains http_requests_total"
+        "$ImplName $metricsPath contains http_requests_total"
 
     Assert-True ($body -match 'http_request_duration_seconds') `
-        "$ImplName /metrics contains http_request_duration_seconds"
+        "$ImplName $metricsPath contains http_request_duration_seconds"
 
     Assert-True ($body -match 'greetings_total') `
-        "$ImplName /metrics contains custom counter greetings_total"
+        "$ImplName $metricsPath contains custom counter greetings_total"
 
     return $body
 }
@@ -316,7 +362,8 @@ function Test-UseCaseSuccess {
     #>
     param([string]$ImplName, [string]$BaseUrl)
 
-    $response = Invoke-Endpoint -Uri "$BaseUrl/api/v1/greetings/hello-world" `
+    $helloPath = Get-ModulePath '/greetings/hello-world'
+    $response = Invoke-Endpoint -Uri "$BaseUrl$helloPath" `
         -Method POST -Body '{"name":"World"}'
 
     Assert-True ($response.StatusCode -eq 200) `
@@ -342,7 +389,8 @@ function Test-UseCaseValidationFailure {
     #>
     param([string]$ImplName, [string]$BaseUrl)
 
-    $response = Invoke-Endpoint -Uri "$BaseUrl/api/v1/greetings/hello-world" `
+    $helloPath = Get-ModulePath '/greetings/hello-world'
+    $response = Invoke-Endpoint -Uri "$BaseUrl$helloPath" `
         -Method POST -Body '{"name":""}'
 
     Assert-True ($response.StatusCode -eq 400) `
@@ -369,7 +417,8 @@ function Test-UseCaseMissingBody {
     #>
     param([string]$ImplName, [string]$BaseUrl)
 
-    $response = Invoke-Endpoint -Uri "$BaseUrl/api/v1/greetings/hello-world" `
+    $helloPath = Get-ModulePath '/greetings/hello-world'
+    $response = Invoke-Endpoint -Uri "$BaseUrl$helloPath" `
         -Method POST -Body '{}'
 
     Assert-True ($response.StatusCode -eq 400) `
@@ -396,7 +445,8 @@ function Test-UseCaseWrongType {
     #>
     param([string]$ImplName, [string]$BaseUrl)
 
-    $response = Invoke-Endpoint -Uri "$BaseUrl/api/v1/greetings/hello-world" `
+    $helloPath = Get-ModulePath '/greetings/hello-world'
+    $response = Invoke-Endpoint -Uri "$BaseUrl$helloPath" `
         -Method POST -Body '{"name":123}'
 
     Assert-True ($response.StatusCode -eq 400) `
@@ -424,7 +474,8 @@ function Test-TimeNowDefault {
     #>
     param([string]$ImplName, [string]$BaseUrl)
 
-    $response = Invoke-Endpoint -Uri "$BaseUrl/api/v1/time/current-time"
+    $timePath = Get-ModulePath '/time/current-time'
+    $response = Invoke-Endpoint -Uri "$BaseUrl$timePath"
 
     Assert-True ($response.StatusCode -eq 200) `
         "$ImplName GET time/now (default) → 200"
@@ -452,7 +503,7 @@ function Test-TimeNowWithOffset {
     #>
     param([string]$ImplName, [string]$BaseUrl)
 
-    $response = Invoke-Endpoint -Uri "$BaseUrl/api/v1/time/current-time?tz=utc-5"
+    $response = Invoke-Endpoint -Uri "${BaseUrl}$(Get-ModulePath '/time/current-time')?tz=utc-5"
 
     Assert-True ($response.StatusCode -eq 200) `
         "$ImplName GET time/now?tz=utc-5 → 200"
@@ -480,7 +531,7 @@ function Test-TimeNowInvalidTz {
     #>
     param([string]$ImplName, [string]$BaseUrl)
 
-    $response = Invoke-Endpoint -Uri "$BaseUrl/api/v1/time/current-time?tz=invalid"
+    $response = Invoke-Endpoint -Uri "${BaseUrl}$(Get-ModulePath '/time/current-time')?tz=invalid"
 
     Assert-True ($response.StatusCode -eq 400) `
         "$ImplName GET time/now?tz=invalid → 400"
@@ -505,98 +556,99 @@ function Test-OpenApiJson {
     #>
     param([string]$ImplName, [string]$BaseUrl)
 
-    $response = Invoke-Endpoint -Uri "$BaseUrl/openapi.json"
+    $openApiJsonPath = Get-OperationalPath '/openapi.json'
+    $response = Invoke-Endpoint -Uri "$BaseUrl$openApiJsonPath"
 
     Assert-True ($response.StatusCode -eq 200) `
-        "$ImplName /openapi.json → 200"
+        "$ImplName $openApiJsonPath → 200"
 
     $contentType = "$($response.ContentType)"
     Assert-True ($contentType -match 'application/json') `
-        "$ImplName /openapi.json Content-Type is application/json"
+        "$ImplName $openApiJsonPath Content-Type is application/json"
 
     $json = $response.Body | ConvertFrom-Json
 
     Assert-True ($json.openapi -eq '3.0.0') `
-        "$ImplName /openapi.json openapi version is '3.0.0'"
+        "$ImplName $openApiJsonPath openapi version is '3.0.0'"
 
     Assert-True ($json.info.title -eq 'Modular API') `
-        "$ImplName /openapi.json info.title is 'Modular API'"
+        "$ImplName $openApiJsonPath info.title is 'Modular API'"
 
     Assert-True ($null -ne $json.paths) `
-        "$ImplName /openapi.json has paths object"
+        "$ImplName $openApiJsonPath has paths object"
 
     # The example registers POST /api/v1/greetings/hello-world
     $greetingsPath = $json.paths.'/api/v1/greetings/hello-world'
     Assert-True ($null -ne $greetingsPath) `
-        "$ImplName /openapi.json paths has /api/v1/greetings/hello-world"
+        "$ImplName $openApiJsonPath paths has /api/v1/greetings/hello-world"
 
     Assert-True ($null -ne $greetingsPath.post) `
-        "$ImplName /openapi.json /api/v1/greetings/hello-world has POST operation"
+        "$ImplName $openApiJsonPath /api/v1/greetings/hello-world has POST operation"
 
     # Request body schema
     $requestBodySchema = $greetingsPath.post.requestBody.content.'application/json'.schema
     Assert-True ($null -ne $requestBodySchema) `
-        "$ImplName /openapi.json POST hello has request body schema"
+        "$ImplName $openApiJsonPath POST hello has request body schema"
 
     # Response 200 schema
     $responseSchema = $greetingsPath.post.responses.'200'.content.'application/json'.schema
     Assert-True ($null -ne $responseSchema) `
-        "$ImplName /openapi.json POST hello has 200 response schema"
+        "$ImplName $openApiJsonPath POST hello has 200 response schema"
 
     # components.schemas — named schemas for Swagger UI Schemas section
     Assert-True ($null -ne $json.components) `
-        "$ImplName /openapi.json has components object"
+        "$ImplName $openApiJsonPath has components object"
 
     Assert-True ($null -ne $json.components.schemas) `
-        "$ImplName /openapi.json has components.schemas"
+        "$ImplName $openApiJsonPath has components.schemas"
 
     $schemaNames = $json.components.schemas.PSObject.Properties.Name | Sort-Object
     Assert-True ($schemaNames -contains 'greetings_hello_world_Input') `
-        "$ImplName /openapi.json components.schemas has greetings_hello_world_Input"
+        "$ImplName $openApiJsonPath components.schemas has greetings_hello_world_Input"
 
     Assert-True ($schemaNames -contains 'greetings_hello_world_Output') `
-        "$ImplName /openapi.json components.schemas has greetings_hello_world_Output"
+        "$ImplName $openApiJsonPath components.schemas has greetings_hello_world_Output"
 
     # requestBody and response must use $ref to components.schemas
     Assert-True ($requestBodySchema.'$ref' -match 'greetings_hello_world_Input') `
-        "$ImplName /openapi.json POST hello requestBody uses `$ref to Input schema"
+        "$ImplName $openApiJsonPath POST hello requestBody uses `$ref to Input schema"
 
     Assert-True ($responseSchema.'$ref' -match 'greetings_hello_world_Output') `
-        "$ImplName /openapi.json POST hello response uses `$ref to Output schema"
+        "$ImplName $openApiJsonPath POST hello response uses `$ref to Output schema"
 
     # Schema content — Input must have properties.name with type string
     $inputSchema = $json.components.schemas.'greetings_hello_world_Input'
     $hasInputName = ($null -ne $inputSchema.properties) -and ($null -ne $inputSchema.properties.name)
     Assert-True $hasInputName `
-        "$ImplName /openapi.json greetings_hello_world_Input has properties.name"
+        "$ImplName $openApiJsonPath greetings_hello_world_Input has properties.name"
 
     if ($hasInputName) {
         Assert-True ($inputSchema.properties.name.type -eq 'string') `
-            "$ImplName /openapi.json greetings_hello_world_Input.name type is 'string'"
+            "$ImplName $openApiJsonPath greetings_hello_world_Input.name type is 'string'"
     }
 
     # Schema content — Output must have properties.message with type string
     $outputSchema = $json.components.schemas.'greetings_hello_world_Output'
     $hasOutputMessage = ($null -ne $outputSchema.properties) -and ($null -ne $outputSchema.properties.message)
     Assert-True $hasOutputMessage `
-        "$ImplName /openapi.json greetings_hello_world_Output has properties.message"
+        "$ImplName $openApiJsonPath greetings_hello_world_Output has properties.message"
 
     if ($hasOutputMessage) {
         Assert-True ($outputSchema.properties.message.type -eq 'string') `
-            "$ImplName /openapi.json greetings_hello_world_Output.message type is 'string'"
+            "$ImplName $openApiJsonPath greetings_hello_world_Output.message type is 'string'"
     }
 
     # ── Time/Now endpoint in OpenAPI ─────────────────────────────────────────
 
     $timePath = $json.paths.'/api/v1/time/current-time'
     Assert-True ($null -ne $timePath) `
-        "$ImplName /openapi.json paths has /api/v1/time/current-time"
+        "$ImplName $openApiJsonPath paths has /api/v1/time/current-time"
 
     Assert-True ($null -ne $timePath.get) `
-        "$ImplName /openapi.json /api/v1/time/current-time has GET operation"
+        "$ImplName $openApiJsonPath /api/v1/time/current-time has GET operation"
 
     Assert-True ($schemaNames -contains 'time_current_time_Output') `
-        "$ImplName /openapi.json components.schemas has time_current_time_Output"
+        "$ImplName $openApiJsonPath components.schemas has time_current_time_Output"
 
     return $json
 }
@@ -608,30 +660,31 @@ function Test-OpenApiYaml {
     #>
     param([string]$ImplName, [string]$BaseUrl)
 
-    $response = Invoke-Endpoint -Uri "$BaseUrl/openapi.yaml"
+    $openApiYamlPath = Get-OperationalPath '/openapi.yaml'
+    $response = Invoke-Endpoint -Uri "$BaseUrl$openApiYamlPath"
 
     Assert-True ($response.StatusCode -eq 200) `
-        "$ImplName /openapi.yaml → 200"
+        "$ImplName $openApiYamlPath → 200"
 
     $body = $response.Body
 
     Assert-True ($body -match 'openapi:') `
-        "$ImplName /openapi.yaml contains 'openapi:' key"
+        "$ImplName $openApiYamlPath contains 'openapi:' key"
 
     Assert-True ($body -match 'info:') `
-        "$ImplName /openapi.yaml contains 'info:' key"
+        "$ImplName $openApiYamlPath contains 'info:' key"
 
     Assert-True ($body -match 'paths:') `
-        "$ImplName /openapi.yaml contains 'paths:' key"
+        "$ImplName $openApiYamlPath contains 'paths:' key"
 
     Assert-True ($body -match '/api/v1/greetings/hello-world') `
-        "$ImplName /openapi.yaml contains /api/v1/greetings/hello-world path"
+        "$ImplName $openApiYamlPath contains /api/v1/greetings/hello-world path"
 
     Assert-True ($body -match 'components:') `
-        "$ImplName /openapi.yaml contains 'components:' section"
+        "$ImplName $openApiYamlPath contains 'components:' section"
 
     Assert-True ($body -match 'schemas:') `
-        "$ImplName /openapi.yaml contains 'schemas:' section"
+        "$ImplName $openApiYamlPath contains 'schemas:' section"
 
     return $body
 }
@@ -806,12 +859,12 @@ function Compare-Implementations {
             "Docs keyword '$keyword' present in all implementations"
     }
 
-    # ── /docs HTML byte-identical across implementations ─────────────────────
+    # ── Shared-basePath docs HTML byte-identical across implementations ──────
     # All three templates must produce the same HTML (after title interpolation).
 
     Assert-True (
         ($Dart.Docs -eq $TypeScript.Docs) -and ($Dart.Docs -eq $Python.Docs)
-    ) '/docs HTML identical across all three implementations'
+    ) "$(Get-OperationalPath '/docs') HTML identical across all three implementations"
 
     # ── OpenAPI components.schemas parity ─────────────────────────────────────
     # All three must expose the same named schemas in components.schemas.
@@ -895,11 +948,12 @@ try {
         -Port $dartPort
 
     $tsProcess = Start-ExampleServer -Name 'TypeScript' -WorkDir $tsDir `
-        -Command $npxCmd -Arguments @('tsx', 'example/example.ts', $tsPort) `
+        -Command $npxCmd -Arguments @('--yes', 'tsx', 'example/example.ts', $tsPort) `
         -Port $tsPort
 
     $pyProcess = Start-ExampleServer -Name 'Python' -WorkDir $pyDir `
         -Command $pyVenv -Arguments @('-m', 'example.example', $pyPort) `
+        -Environment @{ PYTHONPATH = 'src' } `
         -Port $pyPort
 
     # ── Exercise each implementation ─────────────────────────────────────────

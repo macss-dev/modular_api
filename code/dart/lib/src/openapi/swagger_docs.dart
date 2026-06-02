@@ -23,9 +23,18 @@ const _docsUiHtmlTemplate = '''
   <body>
     <div id="swagger-ui"></div>
     <script src="$_docsUiCdn/docs-ui.js"></script>
-    <script>DocsUI.init({ specUrl: "/openapi.json" })</script>
+    <script>DocsUI.init({ specUrl: "{{specUrl}}" })</script>
   </body>
 </html>''';
+
+String buildSwaggerDocsHtml({
+  required String title,
+  String specUrl = '/openapi.json',
+}) {
+  return _docsUiHtmlTemplate
+      .replaceFirst('{{title}}', title)
+      .replaceFirst('{{specUrl}}', specUrl);
+}
 
 /// Returns a Shelf [Handler] that serves the docs-ui HTML.
 ///
@@ -33,7 +42,7 @@ const _docsUiHtmlTemplate = '''
 /// router.get('/docs', swaggerDocsHandler(title: 'My API'));
 /// ```
 Handler swaggerDocsHandler({required String title}) {
-  final html = _docsUiHtmlTemplate.replaceFirst('{{title}}', title);
+  final html = buildSwaggerDocsHtml(title: title);
 
   return (Request request) {
     return Response.ok(

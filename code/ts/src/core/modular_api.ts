@@ -6,18 +6,16 @@
 
 import express, { type Express, type RequestHandler, type Router } from 'express';
 import { ModuleBuilder } from './module_builder';
-import { buildOpenApiSpec, openApiJsonHandler, openApiYamlHandler } from '../openapi/openapi';
-import { swaggerDocsHandler } from '../openapi/swagger_docs';
 import type { HealthCheck } from './health/health_check';
 import { HealthService } from './health/health_service';
-import { healthHandler } from './health/health_handler';
 import { MetricRegistry, MetricsRegistrar } from './metrics/metric_registry';
-import { metricsMiddleware, metricsHandler } from './metrics/metrics_middleware';
 import { loggingMiddleware } from './logger/logging_middleware';
 import { LogLevel } from './logger/logger';
 import { bodyParserErrorHandler } from './body_parser_error_handler';
-import { apiRegistry } from './registry';
+import { unhandledRequestErrorHandler } from './unhandled_request_error_handler';
 import type { Counter, Gauge, Histogram } from './metrics/metric';
+import { buildRuntimePlugins, operationalRoutePaths } from './official_plugins';
+import { orderPlugins, PluginHostError, RuntimePluginHost, type Plugin } from './plugin';
 
 export interface ModularApiOptions {
   /** Base path prefix for all module routes. Default: '/api' */
@@ -75,8 +73,10 @@ export class ModularApi {
   private readonly rootRouter: Router;
   private readonly basePath: string;
   private readonly title: string;
+  private readonly version: string;
   private readonly middlewares: RequestHandler[] = [];
   private readonly healthService: HealthService;
+  private readonly plugins: Plugin[] = [];
 
   // Metrics
   private readonly metricsEnabled: boolean;
@@ -102,9 +102,10 @@ export class ModularApi {
   constructor(options: ModularApiOptions = {}) {
     this.basePath = options.basePath ?? '/api';
     this.title = options.title ?? 'Modular API';
+    this.version = options.version ?? 'x.y.z';
 
     this.healthService = new HealthService({
-      version: options.version ?? 'x.y.z',
+      version: this.version,
       releaseId: options.releaseId,
     });
 
@@ -190,6 +191,11 @@ export class ModularApi {
     return this;
   }
 
+  plugin(plugin: Plugin): this {
+    this.plugins.push(plugin);
+    return this;
+  }
+
   /**
    * Starts the Express server on the given port.
    *
@@ -199,12 +205,87 @@ export class ModularApi {
    *
    * @returns The Node.js http.Server instance
    */
-  serve(options: { port: number; host?: string }): Promise<import('http').Server> {
+  async serve(options: { port: number; host?: string }): Promise<import('http').Server> {
     const { port, host = '0.0.0.0' } = options;
+    const operationalPaths = operationalRoutePaths(this.basePath, this.metricsEnabled ? this.metricsPath : undefined);
+    const runtimePlugins = [
+      ...this.plugins,
+      ...buildRuntimePlugins({
+        basePath: this.basePath,
+        title: this.title,
+        version: this.version,
+        port,
+        servers: this.servers,
+        healthService: this.healthService,
+        metrics:
+          this.metricsEnabled &&
+          this.metricRegistry &&
+          this.httpRequestsTotal &&
+          this.httpRequestsInFlight &&
+          this.httpRequestDuration
+            ? {
+                path: this.metricsPath,
+                registry: this.metricRegistry,
+                requestsTotal: this.httpRequestsTotal,
+                requestsInFlight: this.httpRequestsInFlight,
+                requestDuration: this.httpRequestDuration,
+                excludedRoutes: this.excludedMetricsRoutes,
+              }
+            : undefined,
+      }),
+    ];
 
-    return new Promise((resolve) => {
+    const seenPluginIds = new Set<string>();
+    for (const plugin of runtimePlugins) {
+      if (seenPluginIds.has(plugin.manifest.id)) {
+        throw new PluginHostError(
+          'PLUGIN_ID_CONFLICT',
+          `Duplicate plugin id: ${plugin.manifest.id}`,
+          plugin.manifest.id,
+          plugin.manifest.id,
+        );
+      }
+      seenPluginIds.add(plugin.manifest.id);
+    }
+
+    const orderedPlugins = orderPlugins(runtimePlugins);
+
+    const pluginHost = new RuntimePluginHost({
+      basePath: this.basePath,
+      title: this.title,
+      version: this.version,
+    });
+
+    try {
+      for (const plugin of orderedPlugins) {
+        pluginHost.beginPluginSetup(plugin.manifest.id);
+        try {
+          plugin.setup(pluginHost);
+        } finally {
+          pluginHost.endPluginSetup();
+        }
+        if (plugin.shutdown) {
+          pluginHost.onShutdown(() => plugin.shutdown!());
+        }
+      }
+
+      pluginHost.freeze();
+      const validationResults = orderedPlugins.flatMap((plugin) => plugin.validate?.(pluginHost) ?? []);
+      pluginHost.assertValid(validationResults);
+    } catch (error) {
+      await pluginHost.shutdown();
+      throw error;
+    }
+
+    return await new Promise((resolve) => {
       // Logging middleware FIRST — trace_id + structured JSON logs.
-      const excludedLogRoutes = ['/health', this.metricsPath, '/docs', '/docs/'];
+      const excludedLogRoutes = [
+        operationalPaths.healthPath,
+        operationalPaths.docsPath,
+        operationalPaths.openApiJsonPath,
+        operationalPaths.openApiYamlPath,
+        ...(operationalPaths.metricsPath ? [operationalPaths.metricsPath] : []),
+      ];
       this.app.use(
         loggingMiddleware({
           logLevel: this.logLevel,
@@ -217,59 +298,37 @@ export class ModularApi {
       this.app.use(express.json());
       this.app.use(bodyParserErrorHandler);
 
-      // Metrics middleware — before user middlewares & routes.
-      // Created here so registeredPaths is populated from apiRegistry.
-      if (
-        this.metricsEnabled &&
-        this.httpRequestsTotal &&
-        this.httpRequestsInFlight &&
-        this.httpRequestDuration
-      ) {
-        const registeredPaths = apiRegistry.routes.map((r) => r.path);
-        this.app.use(
-          metricsMiddleware({
-            requestsTotal: this.httpRequestsTotal,
-            requestsInFlight: this.httpRequestsInFlight,
-            requestDuration: this.httpRequestDuration,
-            excludedRoutes: this.excludedMetricsRoutes,
-            registeredPaths,
-          }),
-        );
-      }
+      pluginHost.applyMiddlewares('preRouting', this.app);
 
       // Register middlewares before routes
       for (const mw of this.middlewares) {
         this.app.use(mw);
       }
 
-      // Metrics endpoint (before rootRouter — its own handler).
-      if (this.metricsEnabled && this.metricRegistry) {
-        this.app.get(this.metricsPath, metricsHandler(this.metricRegistry));
-      }
+      pluginHost.applyMiddlewares('preHandler', this.app);
+      pluginHost.applyMiddlewares('postHandler', this.app);
 
-      // Health endpoint — IETF Health Check Response Format
-      this.app.get('/health', healthHandler(this.healthService));
+      pluginHost.applyRoutes(this.rootRouter);
 
       // Module use case routes.
       this.app.use(this.rootRouter);
-
-      // Swagger UI docs — inline HTML, no external dependency (PRD-003).
-      this.app.get('/docs', swaggerDocsHandler({ title: this.title }));
-
-      // Raw spec endpoints
-      const spec = buildOpenApiSpec({ title: this.title, port, servers: this.servers });
-      this.app.get('/openapi.json', openApiJsonHandler(spec));
-      this.app.get('/openapi.yaml', openApiYamlHandler(spec));
+      this.app.use(unhandledRequestErrorHandler);
 
       const server = this.app.listen(port, host, () => {
-        console.log(`Docs  → http://localhost:${port}/docs`);
-        console.log(`Health → http://localhost:${port}/health`);
-        console.log(`OpenAPI JSON → http://localhost:${port}/openapi.json`);
-        console.log(`OpenAPI YAML → http://localhost:${port}/openapi.yaml`);
-        if (this.metricsEnabled) {
-          console.log(`Metrics → http://localhost:${port}${this.metricsPath}`);
+        const address = server.address();
+        const resolvedPort = typeof address === 'object' && address ? address.port : port;
+        console.log(`Docs  → http://localhost:${resolvedPort}${operationalPaths.docsPath}`);
+        console.log(`Health → http://localhost:${resolvedPort}${operationalPaths.healthPath}`);
+        console.log(`OpenAPI JSON → http://localhost:${resolvedPort}${operationalPaths.openApiJsonPath}`);
+        console.log(`OpenAPI YAML → http://localhost:${resolvedPort}${operationalPaths.openApiYamlPath}`);
+        if (operationalPaths.metricsPath) {
+          console.log(`Metrics → http://localhost:${resolvedPort}${operationalPaths.metricsPath}`);
         }
         resolve(server);
+      });
+
+      server.on('close', () => {
+        void pluginHost.shutdown();
       });
     });
   }

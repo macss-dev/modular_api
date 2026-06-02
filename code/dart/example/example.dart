@@ -11,7 +11,7 @@
 ///   curl http://localhost:8080/api/v1/time/current-time?tz=utc-5
 ///
 /// Docs:
-///   http://localhost:8080/docs
+///   http://localhost:8080/api/v1/docs
 library;
 
 import 'package:modular_api/modular_api.dart';
@@ -36,13 +36,13 @@ Future<void> main(List<String> args) async {
     //   {'url': 'https://miapi.example.com', 'description': 'Production'},
     //   {'url': 'http://192.168.5.82:8080', 'description': 'LAN'},
     // ],
-    // Opt-in Prometheus metrics at GET /metrics
+    // Opt-in Prometheus metrics at GET /api/v1/metrics
     metricsEnabled: true,
     // Structured JSON logging (Loki/Grafana compatible)
     logLevel: LogLevel.debug,
   );
 
-  // Register health checks (optional — /health works without any checks)
+  // Register health checks (optional — /api/v1/health works without any checks)
   api.addHealthCheck(AlwaysPassHealthCheck());
 
   // Register custom metrics (only when metricsEnabled: true)

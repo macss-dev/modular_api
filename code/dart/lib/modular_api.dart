@@ -8,6 +8,29 @@ export 'package:shelf/shelf.dart' show Middleware, Handler, Request, Response;
 
 // Core
 export 'src/core/modular_api.dart' show ModularApi, ModuleBuilder;
+export 'src/core/plugin.dart'
+    show
+        Capability,
+        CapabilityHandle,
+        HostMetadata,
+        ModuleExtensionContribution,
+        ModuleExtensionPoint,
+        Plugin,
+        PluginHost,
+        PluginHostError,
+        PluginManifest,
+        PluginMiddleware,
+        PluginRequestContext,
+        PluginRequirement,
+        PluginRoute,
+        PluginValidationResult,
+        RegisteredModuleView,
+        RegisteredUseCaseView,
+        RuntimePluginHost,
+        orderPlugins,
+        ShutdownAwarePlugin,
+        ValidatingPlugin,
+        hostApiVersion;
 export 'src/core/usecase/usecase.dart' show UseCase, Input, Output;
 export 'src/core/usecase/use_case_exception.dart' show UseCaseException;
 export 'src/core/schema/field.dart'

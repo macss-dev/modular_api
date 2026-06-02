@@ -15,7 +15,7 @@
 
 # Docs::
 
-#     http://localhost:8080/docs
+#     http://localhost:8080/api/v1/docs
 
 from __future__ import annotations
 

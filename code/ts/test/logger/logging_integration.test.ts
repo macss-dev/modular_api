@@ -158,7 +158,7 @@ describe('Logger integration (TypeScript)', () => {
     expect(res.body).toEqual({ pong: true });
   });
 
-  it('/health is excluded from logging (no X-Request-ID header)', async () => {
+  it('/api/health is excluded from logging (no X-Request-ID header)', async () => {
     const api = new ModularApi({
       basePath: '/api',
       title: 'Logger Test',
@@ -167,7 +167,7 @@ describe('Logger integration (TypeScript)', () => {
     api.module('test', (m) => m.usecase('ping', PingUseCase.fromJson, { inputClass: PingInput, outputClass: PingOutput }));
     server = await api.serve({ port: 0 });
 
-    const res = await request(server).get('/health');
+    const res = await request(server).get('/api/health');
 
     expect(res.status).toBe(200);
     // Health endpoint is excluded from logging middleware, so no X-Request-ID

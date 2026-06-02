@@ -140,7 +140,7 @@ void main() {
     });
   });
 
-  group('Integration: /openapi.json endpoint', () {
+  group('Integration: /api/openapi.json endpoint', () {
     late HttpServer server;
     late int port;
 
@@ -169,7 +169,7 @@ void main() {
 
     test('returns 200 with application/json content-type', () async {
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
 
       expect(resp.statusCode, 200);
       expect(resp.headers['content-type'], contains('application/json'));
@@ -177,7 +177,7 @@ void main() {
 
     test('returns valid OpenAPI spec with correct structure', () async {
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
 
       final spec = jsonDecode(resp.body) as Map<String, dynamic>;
       expect(spec['openapi'], '3.0.0');
@@ -188,7 +188,7 @@ void main() {
 
     test('contains registered use case path', () async {
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
 
       final spec = jsonDecode(resp.body) as Map<String, dynamic>;
       final paths = spec['paths'] as Map<String, dynamic>;
@@ -197,7 +197,7 @@ void main() {
 
     test('spec has servers entry', () async {
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
 
       final spec = jsonDecode(resp.body) as Map<String, dynamic>;
       expect(spec['servers'], isA<List>());
@@ -205,7 +205,7 @@ void main() {
     });
   });
 
-  group('Integration: /openapi.yaml endpoint', () {
+  group('Integration: /api/openapi.yaml endpoint', () {
     late HttpServer server;
     late int port;
 
@@ -234,7 +234,7 @@ void main() {
 
     test('returns 200 with application/x-yaml content-type', () async {
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.yaml'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.yaml'));
 
       expect(resp.statusCode, 200);
       expect(resp.headers['content-type'], contains('application/x-yaml'));
@@ -242,21 +242,21 @@ void main() {
 
     test('returns YAML with openapi version', () async {
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.yaml'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.yaml'));
 
       expect(resp.body, contains('openapi: 3.0.0'));
     });
 
     test('YAML contains registered use case path', () async {
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.yaml'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.yaml'));
 
       expect(resp.body, contains('/api/test/ping'));
     });
 
     test('YAML contains info section', () async {
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.yaml'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.yaml'));
 
       expect(resp.body, contains('info:'));
       expect(resp.body, contains('title: Test API'));
@@ -264,7 +264,7 @@ void main() {
 
     test('YAML is not JSON (does not start with {)', () async {
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.yaml'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.yaml'));
 
       expect(resp.body.trimLeft().startsWith('{'), isFalse);
     });
@@ -299,9 +299,9 @@ void main() {
 
     test('JSON and YAML represent the same spec', () async {
       final jsonResp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
       final yamlResp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.yaml'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.yaml'));
 
       // Both should return 200
       expect(jsonResp.statusCode, 200);
@@ -345,7 +345,7 @@ void main() {
       port = server.port;
 
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
       final spec = jsonDecode(resp.body) as Map<String, dynamic>;
       final servers = spec['servers'] as List;
 
@@ -374,7 +374,7 @@ void main() {
       port = server.port;
 
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
       final spec = jsonDecode(resp.body) as Map<String, dynamic>;
       final servers = spec['servers'] as List;
 
@@ -405,7 +405,7 @@ void main() {
       port = server.port;
 
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
       final spec = jsonDecode(resp.body) as Map<String, dynamic>;
       final servers = spec['servers'] as List;
 
@@ -435,7 +435,7 @@ void main() {
       port = server.port;
 
       final resp =
-          await http.get(Uri.parse('http://localhost:$port/openapi.json'));
+          await http.get(Uri.parse('http://localhost:$port/api/openapi.json'));
       final spec = jsonDecode(resp.body) as Map<String, dynamic>;
       final servers = spec['servers'] as List;
 

@@ -23,9 +23,16 @@ const DOCS_UI_HTML_TEMPLATE = `<!DOCTYPE html>
   <body>
     <div id="swagger-ui"></div>
     <script src="${DOCS_UI_CDN}/docs-ui.js"></script>
-    <script>DocsUI.init({ specUrl: "/openapi.json" })</script>
+    <script>DocsUI.init({ specUrl: "{{specUrl}}" })</script>
   </body>
 </html>`;
+
+export function buildSwaggerDocsHtml(options: { title: string; specUrl?: string }): string {
+  return DOCS_UI_HTML_TEMPLATE.replace('{{title}}', options.title).replace(
+    '{{specUrl}}',
+    options.specUrl ?? '/openapi.json',
+  );
+}
 
 /**
  * Returns an Express handler that serves the docs-ui HTML.
@@ -36,7 +43,7 @@ const DOCS_UI_HTML_TEMPLATE = `<!DOCTYPE html>
  * ```
  */
 export function swaggerDocsHandler(options: { title: string }): RequestHandler {
-  const html = DOCS_UI_HTML_TEMPLATE.replace('{{title}}', options.title);
+  const html = buildSwaggerDocsHtml(options);
 
   return (_req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
