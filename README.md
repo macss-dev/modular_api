@@ -1,18 +1,12 @@
 # modular_api
 
-> *The theoretical and practical core of the MACSS ecosystem.*
+> Build modular, use-case-centric HTTP APIs in Dart, TypeScript, and Python.
 
-A methodology for building modular, contract-first, AI-ready APIs — distributed as official SDKs in three languages, extensible through a plugin interface that anyone can implement.
+`modular_api` is a monorepo of official SDKs for building modular HTTP APIs where each endpoint maps to one use case. The core is intentionally small: modules, use cases, DTOs, request lifecycle, HTTP pipeline, request-scoped logging, and a plugin host.
 
----
+The approved plugin-host direction formalizes `/health`, `/metrics`, `/docs`, `/openapi.json`, and `/openapi.yaml` as official plugins mounted under the shared `basePath`. That mount path defaults to `/`, and every public route for an API instance must respect it uniformly. An API mounted at `/api/v1` therefore exposes `/api/v1/health`, `/api/v1/metrics`, `/api/v1/docs`, `/api/v1/openapi.json`, and `/api/v1/openapi.yaml`. Third-party plugins will use that same public contract.
 
-## What is modular_api
-
-`modular_api` is simultaneously three things:
-
-- **A methodology** — part of MACSS (Modular Architecture for Comprehensive Software Solutions). A way of thinking about API design that is modular, contract-first, and AI-ready by default.
-- **A specification** — a set of conventions and contracts that define how modules, plugins, DTOs, repositories, and use cases relate to each other. The spec is the source of truth. The SDKs are its expression.
-- **A set of SDKs** — official implementations in three languages, each producing structurally identical `openapi.json` outputs from the same conceptual model.
+GraphQL is a future official plugin. When enabled it will provide the query side of an optional CQRS profile. REST-only APIs remain a first-class use case.
 
 ---
 
@@ -21,16 +15,16 @@ A methodology for building modular, contract-first, AI-ready APIs — distribute
 ```
 modular_api/
   code/
-    dart/        →  pub.dev: modular_api
-    ts/          →  npm: @macss/modular-api
-    py/          →  PyPI: macss-modular-api
-    docs-ui/     →  npm: @macss/docs-ui
-    tests/       →  cross-language parity tests
-  docs/          →  specification and methodology
+    dart/        -> pub.dev: modular_api
+    ts/          -> npm: @macss/modular-api
+    py/          -> PyPI: macss-modular-api
+    docs-ui/     -> npm: @macss/docs-ui
+    tests/       -> cross-language parity tests
+  docs/          -> architecture, roadmap, design analysis
   README.md
 ```
 
-Each SDK is independently versioned and published. The methodology they implement is identical.
+Each SDK is independently versioned and published. The public API and external behavior are kept aligned across the three implementations.
 
 ---
 
@@ -44,37 +38,44 @@ Each SDK is independently versioned and published. The methodology they implemen
 
 ---
 
-## Core Concepts
+## Core Model
 
 ### Modules
 
-Modules are written by the user. Each module owns exactly one domain — `imc/`, `patients/`, `billing/` — and is self-contained: use cases, DTOs, repository ports, and adapters. Modules do not call each other directly.
+Modules are written by the user. Each module owns one domain and groups its use cases, DTOs, repository ports, and adapters. Modules do not call each other directly through the framework.
 
-### Built-in Endpoints
+### Use Cases
 
-Every SDK ships with the following endpoints out of the box, zero configuration:
+Each endpoint maps to one use case. The framework handles payload extraction, validation, logger injection, execution, and serialization. The user implements only business logic.
 
-| Endpoint | Description |
-|---|---|
-| `GET /docs` | Interactive Swagger UI from `openapi.json` |
-| `GET /health` | IETF Health Check Response Format |
-| `GET /metrics` | Prometheus text exposition format (opt-in) |
-| `GET /openapi.json` | OpenAPI 3.0 specification |
-| `GET /openapi.yaml` | OpenAPI 3.0 specification (YAML) |
+### Plugins
 
-### Plugins *(roadmap)*
+Optional capabilities are now provided by official plugins mounted through the
+public host contract.
 
-Plugins will extend `modular_api` without modifying it. They will implement a single interface and integrate through lifecycle hooks. The core stays lean; the developer composes what they need.
+| Capability | Plugin route under shared `basePath` | Target plugin |
+|---|---|---|
+| Health checks | `/{basePath}/health` | `HealthPlugin` |
+| Prometheus metrics | `/{basePath}/metrics` | `MetricsPlugin` |
+| OpenAPI spec | `/{basePath}/openapi.json`, `/{basePath}/openapi.yaml` | `OpenApiPlugin` |
+| Interactive docs | `/{basePath}/docs` | `DocsPlugin` |
 
-**Ecosystem** — planned packages developed by MACSS:
+The official plugins already use the same public extension model available to
+third-party plugins and keep those endpoints inside the API namespace.
 
-| Package | Description |
-|---|---|
-| `pragma_spec` | Spec Driven Development + MCP bridge |
-| `modular_api_oauth2` | Standards-compliant OAuth2 flows |
-| `modular_api_graphql` | Auto-generated GraphQL from DTOs |
+### Current Plugin Host Behavior
 
-**Community** — anyone will be able to build and publish a plugin. The interface is the only contract.
+- `api.plugin(...)` registers plugin instances without running setup yet.
+- Startup runs plugin setup in dependency order and uses registration order as
+  the tiebreaker when there is no dependency edge.
+- Host registration freezes before plugin validation runs.
+- Startup failure still drains registered shutdown hooks in reverse setup order.
+- All plugin routes resolve under the API instance `basePath`.
+- All three public middleware slots are active; lower `order` values run
+  earlier inside a slot and plugin setup order breaks ties.
+
+See [docs/plugin_host_guide.md](docs/plugin_host_guide.md) for the current
+cross-language authoring guide.
 
 ---
 
@@ -138,75 +139,26 @@ api.serve(port=8080)
 ```
 
 ```bash
-# All three respond identically:
 curl -X POST http://localhost:8080/api/greetings/hello \
   -H "Content-Type: application/json" \
   -d '{"name":"World"}'
- 
-# → {"message": "Hello, World!"}
+
+# -> {"message": "Hello, World!"}
 ```
 
-See `code/dart/example/`, `code/ts/example/`, `code/py/example/` for full implementations including Input, Output, UseCase with `validate()`, health checks, and custom metrics.
+See `code/dart/example/`, `code/ts/example/`, and `code/py/example/` for complete examples.
 
 ---
 
-## The Plugin Interface *(roadmap)*
+## Documentation
 
-Any package that implements this interface will be a valid plugin:
-
-```dart
-// Dart
-abstract class ModularApiPlugin {
-  String get name;
-  List<String> get endpoints;
-  void onModulesLoaded(List<MacssModule> modules);
-  void onOpenApiGenerated(OpenApiSpec spec);
-}
-```
-
-```typescript
-// TypeScript
-interface ModularApiPlugin {
-  name: string;
-  endpoints: string[];
-  onModulesLoaded(modules: MacssModule[]): void;
-  onOpenApiGenerated(spec: OpenApiSpec): void;
-}
-```
-
----
-
-## Ecosystem
-
-```
-modular_api           →  this repo — core SDKs (Dart, TS, Python)
-modular_api_plugins   →  base package for building community plugins  (planned)
-modular_api_graphql   →  GraphQL plugin — CQRS queries               (planned)
-modular_api_oauth2    →  OAuth2 plugin                                (planned)
-pragma_spec           →  Spec Driven Development plugin               (v2.0+)
-pragma_mcp            →  MCP server from /pragma.yaml                 (v2.0+)
-```
-
-All packages will live under the `macss-dev` organization on GitHub.
-
----
-
-## MACSS & Spec Driven Development *(v2.0+ vision)*
-
-`modular_api` implements the MACSS methodology. The v1.0 focus is CQRS: Commands via REST, Queries via GraphQL, with plugins and OAuth2.
-
-In v2.0+, the ecosystem will explore Spec Driven Development: every module begins at Momento Zero — a `pragma_spec.yaml` written by the engineer before any code exists. This file would be the single source of truth, defining states, transitions, workflows, and business intent. The code must honor it.
-
-```
-pragma_spec.yaml   →  Momento Zero (human writes the spec)         (v2.0+)
-code               →  must honor the spec
-openapi.json       →  generated by modular_api                     (✅ today)
-pragma.yaml        →  generated by pragma_spec plugin              (v2.0+)
-MCP server         →  generated by pragma_mcp                      (v2.0+)
-```
+- [docs/architecture.md](docs/architecture.md) - canonical architecture specification
+- [docs/plugin_host_guide.md](docs/plugin_host_guide.md) - current public plugin-host and authoring guide
+- [docs/roadmap.md](docs/roadmap.md) - product roadmap focused on the API and plugin milestones
+- [docs/plugin_architecture_analysis.md](docs/plugin_architecture_analysis.md) - current design analysis for the plugin ecosystem
 
 ---
 
 ## License
 
-MIT — see [LICENSE](./LICENSE)
+MIT - see [LICENSE](./LICENSE)

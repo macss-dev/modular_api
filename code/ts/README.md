@@ -35,10 +35,10 @@ curl -X POST http://localhost:8080/api/greetings/hello \
 { "message": "Hello, World!" }
 ```
 
-**Docs** → `http://localhost:8080/docs`  
-**Health** → `http://localhost:8080/health`  
-**OpenAPI JSON** → `http://localhost:8080/openapi.json` _(also /openapi.yaml)_  
-**Metrics** → `http://localhost:8080/metrics` _(opt-in)_
+**Docs** → `http://localhost:8080/api/docs`
+**Health** → `http://localhost:8080/api/health`
+**OpenAPI JSON** → `http://localhost:8080/api/openapi.json` _(also /api/openapi.yaml)_
+**Metrics** → `http://localhost:8080/api/metrics` _(opt-in)_
 
 See `example/example.ts` for the full implementation including Input, Output, UseCase with `validate()`, and the builder.
 
@@ -53,13 +53,69 @@ See `example/example.ts` for the full implementation including Input, Output, Us
 - `ModularApi` + `ModuleBuilder` — module registration and routing
 - Constructor-based unit testing with fake dependency injection
 - `cors()` middleware — built-in CORS support
-- Swagger UI at `/docs` — auto-generated from registered use cases
-- OpenAPI spec at `/openapi.json` and `/openapi.yaml` — raw spec download
-- Health check at `GET /health` — [IETF Health Check Response Format](doc/health_check_guide.md)
-- Prometheus metrics at `GET /metrics` — [Prometheus exposition format](doc/metrics_guide.md)
+- All public endpoints resolve under the configured `basePath`.
+- Swagger UI at `/{basePath}/docs` — auto-generated from registered use cases
+- OpenAPI spec at `/{basePath}/openapi.json` and `/{basePath}/openapi.yaml` — raw spec download
+- Health check at `GET /{basePath}/health` — [IETF Health Check Response Format](doc/health_check_guide.md)
+- Prometheus metrics at `GET /{basePath}/metrics` — [Prometheus exposition format](doc/metrics_guide.md)
 - Structured JSON logging — Loki/Grafana compatible, [request-scoped with trace_id](doc/logger_guide.md)
 - All endpoints default to `POST` (configurable per use case)
 - Full TypeScript declarations (`.d.ts`) included
+
+---
+
+## Plugin host
+
+The public plugin contract is available from the package exports and is already
+used by the official health, metrics, OpenAPI, and docs plugins.
+
+Current lifecycle behavior:
+
+- `api.plugin(...)` registers a plugin instance without running setup yet
+- `setup(host)` runs during `serve()` in dependency order
+- `validate(host)` runs after registration freeze and can abort startup
+- `shutdown()` runs in reverse setup order on normal shutdown and on partial
+  startup rollback
+- plugin routes always resolve under the configured `basePath`
+- all three public middleware slots are active with deterministic ordering
+
+```ts
+import {
+  ModularApi,
+  type Plugin,
+  type PluginHost,
+  type PluginManifest,
+} from '@macss/modular-api';
+
+class HelloPlugin implements Plugin {
+  readonly manifest: PluginManifest = {
+    id: 'acme.hello',
+    displayName: 'Hello Plugin',
+    version: '0.1.0',
+    hostApiVersion: '>=0.1.0 <0.2.0',
+  };
+
+  setup(host: PluginHost): void {
+    host.registerRoute({
+      id: 'hello-plugin',
+      method: 'GET',
+      path: '/hello-plugin',
+      visibility: 'custom',
+      handler: () => ({
+        status: 200,
+        body: { ok: true, basePath: host.metadata().basePath },
+      }),
+    });
+  }
+
+  validate() {
+    return [];
+  }
+}
+
+const api = new ModularApi({ basePath: '/api' }).plugin(new HelloPlugin());
+await api.serve({ port: 8080 });
+```
 
 ---
 

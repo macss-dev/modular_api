@@ -1,26 +1,27 @@
 # Modular API — Architecture Specification
 
-**Status:** Living Document  
-**Version:** 0.4.5  
-**Applies to:** All implementations (Dart, TypeScript, Python, future languages)  
-**Last updated:** 2026-03-30
+**Status:** Living Document
+**Version:** 0.5.0-draft
+**Applies to:** All implementations (Dart, TypeScript, Python, future languages)
+**Last updated:** 2026-06-01
 
 ---
 
 ## 1. Abstract
 
-Modular API is a **language-agnostic specification** for building use-case-centric
-HTTP APIs. It defines a minimal set of contracts, conventions, and subsystems that
-any conforming implementation must provide — regardless of the programming language
-or HTTP framework underneath.
+Modular API is a **language-agnostic specification** for building modular,
+use-case-centric HTTP APIs. It defines the minimal core that every conforming
+implementation must provide, regardless of programming language or HTTP
+framework.
 
-The specification is deliberately opinionated: every API endpoint maps to exactly
-one use case. Cross-cutting concerns (logging, metrics, health checks) are built-in
-and follow established standards. The developer's only responsibility is to define
-business logic inside use cases and their DTOs.
+The core is deliberately small: module registration, use case contracts,
+request lifecycle execution, middleware pipeline, request-scoped logging
+context, and a plugin host. Optional capabilities such as health checks,
+metrics, OpenAPI generation, and interactive docs are modeled as plugins.
 
-This document is the **canonical reference**. Language-specific packages implement
-this specification by adapting the contracts to their native HTTP framework.
+This document is the **canonical target architecture** for the current plugin
+refactor. Language-specific packages implement this specification by adapting
+the contracts to their native HTTP framework.
 
 ---
 
@@ -29,6 +30,8 @@ this specification by adapting the contracts to their native HTTP framework.
 - **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, **MAY** follow
   [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119) semantics.
 - Code examples use pseudocode unless tied to a specific language binding.
+- When a concrete route example uses `/api/...`, it is illustrating a
+  deployment where `basePath = /api`, not a second routing model.
 - Diagrams use [Mermaid](https://mermaid.js.org/) syntax.
 
 ---
@@ -42,8 +45,8 @@ this specification by adapting the contracts to their native HTTP framework.
 | **Convention over configuration** | Routing, serialization, error handling, and documentation are derived from the contracts automatically. |
 | **Standards over invention** | Every subsystem adopts an established standard (RFC, IETF draft, Prometheus, OpenAPI). |
 | **Zero dependencies when possible** | Prefer native implementations over third-party libraries. External dependencies are justified only when reimplementation is unreasonably costly. |
-| **Opt-in subsystems** | Built-in capabilities (metrics, GraphQL) ship with the package but require explicit activation. |
-| **CQRS by protocol** | Commands (POST/PUT/PATCH/DELETE) use REST. Queries (GET) use GraphQL. The separation is structural — enforced by transport, not convention. UseCases GET are query resolvers; all others are commands. |
+| **Optional capabilities are plugins** | Health, metrics, OpenAPI, docs, and future transports are not part of the core runtime contract. The core provides the host; plugins provide the capability. |
+| **CQRS-ready, but optional** | REST use cases are native to the core. A future GraphQL plugin may provide the query side of CQRS, but REST-only APIs remain a valid first-class use case. |
 
 ---
 
@@ -193,12 +196,12 @@ UseCaseException
 >   "title": "Resource not found",
 >   "status": 404,
 >   "detail": "User with ID 42 not found",
->   "instance": "/api/users/find"
+>   "instance": "/{basePath}/users/find"
 > }
 > ```
 >
 > This applies to **all** error responses — both domain exceptions
-> (`UseCaseException`) and system errors (validation failures, unhandled
+http_requests_total{method="POST",route="/{basePath}/greetings/hello",status_code="200"} 42
 > exceptions). See §12 for the full adoption plan.
 
 **Rules:**
@@ -237,8 +240,8 @@ api.module('greetings', (m) => {
 
 | Registration | Generated route |
 |---|---|
-| `m.usecase('hello', factory)` | `POST /api/greetings/hello` |
-| `m.usecase('hello', factory, { method: 'GET' })` | `GET /api/greetings/hello` |
+| `m.usecase('hello', factory)` | `POST /{basePath}/greetings/hello` |
+| `m.usecase('hello', factory, { method: 'GET' })` | `GET /{basePath}/greetings/hello` |
 
 **Rules:**
 
@@ -248,15 +251,14 @@ api.module('greetings', (m) => {
 
 ### 5.2 ModularApi (Orchestrator)
 
-The top-level class that composes modules, middleware, health checks, and
-auto-mounted endpoints into a running HTTP server.
+The top-level class that composes modules, middleware, plugins, and the HTTP
+server.
 
 ```
 ModularApi
 ├── module(name, build) → this         // Register a module
 ├── use(middleware) → this             // Add custom middleware
-├── addHealthCheck(check) → this       // Register a health check
-├── metrics → MetricsRegistrar?        // Public metric registration (null if disabled)
+├── plugin(plugin) → this              // Register a plugin
 └── serve(options) → Server            // Start the HTTP server
 ```
 
@@ -264,38 +266,64 @@ ModularApi
 
 | Option | Default | Description |
 |---|---|---|
-| `basePath` | `/api` | URL prefix for all use case routes |
-| `title` | `Modular API` | API title (Swagger, health response) |
+| `basePath` | `/` | Shared mount path for all public routes |
+| `title` | `Modular API` | API title exposed to plugins |
 | `version` | `x.y.z` | API version |
-| `releaseId` | `{version}-debug` | Release identifier for health response |
-| `metricsEnabled` | `false` | Enable Prometheus metrics subsystem |
-| `metricsPath` | `/metrics` | Metrics endpoint path |
 | `logLevel` | `info` | Minimum RFC 5424 severity to emit |
 
-**Auto-mounted endpoints:**
+Plugin-specific configuration is owned by the plugin itself, not by the core.
 
-| Endpoint | Description | Content-Type |
-|---|---|---|
-| `GET /health` | IETF health check response | `application/health+json` |
-| `GET /docs` | Swagger UI | `text/html` |
-| `GET /openapi.json` | OpenAPI 3.0 specification | `application/json` |
-| `GET /openapi.yaml` | OpenAPI 3.0 specification | `application/x-yaml` |
-| `GET /metrics` | Prometheus metrics (if enabled) | `text/plain; version=0.0.4` |
+The core does not auto-mount health, metrics, docs, or OpenAPI endpoints.
+Those capabilities are provided by official plugins built on the same public
+contract available to third-party plugins, and they resolve under the shared
+`basePath`. When `basePath` is `/`, all public routes are rooted directly at
+`/`.
+
+### 5.3 Plugin Model
+
+The plugin system is the public extension surface of Modular API.
+
+```
+Plugin Host
+├── register routes
+├── register middleware slots
+├── expose capabilities
+├── resolve capabilities
+└── inspect module and use case registry
+```
+
+**Rules:**
+
+- Official plugins and third-party plugins MUST use the same public contract.
+- Plugins MAY contribute API-instance routes scoped under the shared
+  `/{basePath}`,
+  middleware, startup validation, shutdown hooks, capabilities, and
+  module-scoped extensions.
+- All public routes, including module use case routes and plugin endpoints,
+  MUST resolve under the same `basePath`.
+- Plugins MUST NOT change the core use case lifecycle.
+- Official operational and documentation endpoints such as
+  `/{basePath}/health`, `/{basePath}/metrics`, `/{basePath}/docs`,
+  `/{basePath}/openapi.json`, and `/{basePath}/openapi.yaml` are provided by
+  plugins.
+- Business transports layered on top of the API, such as a future GraphQL
+  plugin, use that same `/{basePath}` namespace.
 
 ---
 
 ## 6. Request Processing Pipeline
 
-The middleware pipeline has a **fixed order** for framework-provided layers.
-Custom middleware is inserted between the framework layers and the route handler.
+The middleware pipeline has a **fixed order** for core-provided layers and
+plugin middleware slots. Custom middleware is inserted after the core logging
+layer and after any plugin middlewares registered for the same slot.
 
 ```mermaid
 flowchart TD
     A[HTTP Request] --> B[Logging Middleware]
-    B --> C[Metrics Middleware]
+    B --> C[Plugin Middlewares]
     C --> D[Custom Middlewares]
     D --> E{Route Match?}
-    E -->|auto-endpoint| F[Health / Metrics / Docs / OpenAPI]
+    E -->|plugin route| F[Plugin Handler]
     E -->|use case route| G[UseCaseHandler]
     G --> H[fromJson]
     H --> I[validate]
@@ -326,11 +354,14 @@ Wraps the entire request lifecycle. Always the first middleware in the pipeline.
 7. Attach `X-Request-ID` to the response.
 8. On unhandled exception: emit `"unhandled exception"` at `error` level.
 
-**Excluded routes:** `/health`, `/metrics`, `/docs` — pass through silently.
+**Excluded routes:** Exclusions are declared by host configuration or by
+plugin policy. The official Health, Metrics, and Docs plugins may opt out of
+access logging.
 
 ### 6.2 Metrics Middleware
 
-Records HTTP request telemetry. Only active when `metricsEnabled` is `true`.
+Implemented by the official `MetricsPlugin`. Records HTTP request telemetry
+only when that plugin is active.
 
 **Behavior:**
 
@@ -420,7 +451,7 @@ any JSON-aware log aggregator.
   "service": "My API",
   "trace_id": "550e8400-e29b-41d4-a716-446655440000",
   "method": "POST",
-  "route": "/api/greetings/hello",
+  "route": "/{basePath}/greetings/hello",
   "fields": {}
 }
 ```
@@ -445,6 +476,10 @@ cryptographically secure random source.
 ---
 
 ## 8. Health Checks
+
+This capability is specified as an official plugin. The core provides the
+plugin host and request context; the `HealthPlugin` provides the endpoint and
+health-check registration surface.
 
 **Standard:** [IETF Health Check Response Format for HTTP APIs (draft-inadarei-api-health-check)](https://datatracker.ietf.org/doc/html/draft-inadarei-api-health-check-06)
 
@@ -471,7 +506,7 @@ HealthCheckResult
 
 ```mermaid
 flowchart LR
-    A[GET /health] --> B[HealthService.evaluate]
+  A[GET /{basePath}/health] --> B[HealthService.evaluate]
     B --> C1[Check 1]
     B --> C2[Check 2]
     B --> C3[Check N]
@@ -519,6 +554,9 @@ flowchart LR
 
 ## 9. Prometheus Metrics
 
+This capability is specified as an official plugin. The core does not own
+metrics endpoints or registries directly.
+
 **Standard:** [Prometheus Exposition Format (version 0.0.4)](https://prometheus.io/docs/instrumenting/exposition_formats/)
 
 ### 9.1 Metric Types
@@ -563,12 +601,12 @@ api.metrics?.createHistogram({ name: 'query_duration_seconds', help: 'DB query d
 
 ### 9.5 Exposition Endpoint
 
-`GET /metrics` returns `text/plain; version=0.0.4; charset=utf-8`:
+`GET /{basePath}/metrics` returns `text/plain; version=0.0.4; charset=utf-8`:
 
 ```
 # HELP http_requests_total Total number of HTTP requests.
 # TYPE http_requests_total counter
-http_requests_total{method="POST",route="/api/greetings/hello",status_code="200"} 42
+http_requests_total{method="POST",route="/{basePath}/greetings/hello",status_code="200"} 42
 # HELP http_requests_in_flight Number of HTTP requests currently being processed.
 # TYPE http_requests_in_flight gauge
 http_requests_in_flight 0
@@ -577,6 +615,10 @@ http_requests_in_flight 0
 ---
 
 ## 10. OpenAPI Specification Generation
+
+This capability is specified as an official plugin. The interactive docs UI at
+`/{basePath}/docs` is a separate official plugin that consumes the generated
+spec.
 
 **Standard:** [OpenAPI Specification 3.0.3](https://spec.openapis.org/oas/v3.0.3)
 
@@ -593,9 +635,9 @@ flowchart TD
     F --> H[Build path operation]
     G --> H
     H --> I[Cached OpenAPI spec]
-    I --> J["/openapi.json"]
-    I --> K["/openapi.yaml"]
-    I --> L["/docs — Swagger UI"]
+    I --> J["/{basePath}/openapi.json"]
+    I --> K["/{basePath}/openapi.yaml"]
+    I --> L["/{basePath}/docs — Swagger UI"]
 ```
 
 ### 10.2 Path Operation Mapping
@@ -623,12 +665,12 @@ Schemas are registered as OpenAPI components using the pattern:
 ### 10.5 JSON to YAML Conversion
 
 Implementations MUST include a **zero-dependency** JSON-to-YAML converter for
-the `/openapi.yaml` endpoint. YAML reserved words and special characters MUST
-be properly quoted.
+the `/{basePath}/openapi.yaml` endpoint. YAML reserved words and special
+characters MUST be properly quoted.
 
 ---
 
-## 11. Routing and Future QCSR Architecture
+## 11. Routing and Optional CQRS Profile
 
 ### 11.1 Current: RESTful Routing
 
@@ -638,39 +680,45 @@ All use case endpoints follow the pattern:
 {METHOD} /{basePath}/{moduleName}/{useCaseName}
 ```
 
+Official plugin endpoints use that same API namespace and follow:
+
+```
+{METHOD} /{basePath}/{pluginPath}
+```
+
 Full REST method support: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.
 Default method is `POST`.
 
-### 11.2 Future: QCSR (Query–Command Separation Responsibilities)
+### 11.2 Future: Optional CQRS Profile
 
-> **Planned for a future version.**
+> **Planned for a future version. Not part of the current plugin milestone.**
 
-The architecture will evolve toward a clear separation between reads and writes:
+If the official GraphQL plugin is enabled, the architecture may evolve toward
+an optional separation between reads and writes:
 
 ```mermaid
 flowchart LR
     subgraph commands ["Commands (REST)"]
-        A[POST /api/users/create] --> B[UseCase]
-        C[POST /api/users/update] --> D[UseCase]
-        E[DELETE /api/users/delete] --> F[UseCase]
+    A[POST /{basePath}/users/create] --> B[UseCase]
+    C[POST /{basePath}/users/update] --> D[UseCase]
+    E[DELETE /{basePath}/users/delete] --> F[UseCase]
     end
 
     subgraph queries ["Queries (GraphQL)"]
-        G[POST /api/graphql] --> H[GraphQL Engine]
+    G[POST /{basePath}/graphql] --> H[GraphQL Engine]
         H --> I[Module Resolvers]
     end
 ```
 
 **Key decisions:**
 
-- **Commands** (writes) remain as REST use case endpoints.
-- **Queries** (reads) move to a single GraphQL endpoint at `/{basePath}/graphql`.
-- GraphQL is an **internal plugin**: ships with the package but requires explicit
-  activation (similar to `metricsEnabled`).
-- Schema is SDL-first: defined in `.graphql` files per module.
-- The framework performs automatic schema merging across modules.
-- GraphQL mutations are **not supported** — all mutations go through REST use cases.
-- Logging, metrics, and middleware are shared between REST and GraphQL.
+- **Commands** remain REST use case endpoints.
+- **Queries** may be exposed through an official GraphQL plugin.
+- GraphQL is optional. A REST-only API remains valid.
+- The GraphQL plugin MUST share logging, middleware, and request context with
+  the REST pipeline.
+- The GraphQL plugin MUST be implementable through the public plugin and
+  module-extension contracts, not through core-only escape hatches.
 
 ---
 
@@ -689,7 +737,7 @@ adopt the `application/problem+json` content type with the standardized body:
   "title": "Validation Failed",
   "status": 400,
   "detail": "Field 'email' is required",
-  "instance": "/api/users/create"
+  "instance": "/{basePath}/users/create"
 }
 ```
 
@@ -710,8 +758,7 @@ Decouple the use case lifecycle from HTTP:
 flowchart TD
     A[UseCaseExecutor] --> B["fromJson → validate → execute → serialize"]
     C[HttpAdapter] --> A
-    D[GrpcAdapter] --> A
-    E[GraphQLAdapter] --> A
+  D[FutureAdapter] --> A
 ```
 
 The `UseCaseExecutor` owns the canonical lifecycle. Transport adapters handle

@@ -39,10 +39,10 @@ curl -X POST http://localhost:8080/api/greetings/hello \
 {"message":"Hello, World!"}
 ```
 
-**Docs** → `http://localhost:8080/docs`  
-**Health** → `http://localhost:8080/health`  
-**OpenAPI JSON** → `http://localhost:8080/openapi.json` *(also /openapi.yaml)*  
-**Metrics** → `http://localhost:8080/metrics` *(opt-in)*  
+**Docs** → `http://localhost:8080/api/docs`
+**Health** → `http://localhost:8080/api/health`
+**OpenAPI JSON** → `http://localhost:8080/api/openapi.json` *(also /api/openapi.yaml)*
+**Metrics** → `http://localhost:8080/api/metrics` *(opt-in)*
 
 See `example/example.dart` for the full implementation including Input, Output, UseCase with `validate()`, and the builder.
 
@@ -56,12 +56,64 @@ See `example/example.dart` for the full implementation including Input, Output, 
 - `UseCaseException` — structured error handling (status code, message, error code, details)
 - `ModularApi` + `ModuleBuilder` — module registration and routing
 - `corsMiddleware()` — configurable CORS support
-- Swagger UI at `/docs` — auto-generated from registered use cases
-- OpenAPI spec at `/openapi.json` and `/openapi.yaml` — raw spec download
-- Health check at `GET /health` — [IETF Health Check Response Format](doc/health_check_guide.md)
-- Prometheus metrics at `GET /metrics` — [Prometheus exposition format](doc/metrics_guide.md)
+- All public endpoints resolve under the configured `basePath`.
+- Swagger UI at `/{basePath}/docs` — auto-generated from registered use cases
+- OpenAPI spec at `/{basePath}/openapi.json` and `/{basePath}/openapi.yaml` — raw spec download
+- Health check at `GET /{basePath}/health` — [IETF Health Check Response Format](doc/health_check_guide.md)
+- Prometheus metrics at `GET /{basePath}/metrics` — [Prometheus exposition format](doc/metrics_guide.md)
 - Structured JSON logging — Loki/Grafana compatible, [request-scoped with trace_id](doc/logger_guide.md)
 - All endpoints default to `POST` (configurable per use case)
+
+---
+
+## Plugin host
+
+The public plugin contract is available from `package:modular_api/modular_api.dart`
+and is already used by the official health, metrics, OpenAPI, and docs plugins.
+
+Current lifecycle behavior:
+
+- `api.plugin(...)` registers a plugin instance without running setup yet
+- `setup(host)` runs during `serve()` in dependency order
+- `ValidatingPlugin.validate(host)` runs after registration freeze and can abort startup
+- `ShutdownAwarePlugin.shutdown()` runs in reverse setup order on normal shutdown and on partial startup rollback
+- plugin routes always resolve under the configured `basePath`
+- all three public middleware slots are active with deterministic ordering
+
+```dart
+import 'dart:convert';
+
+import 'package:modular_api/modular_api.dart';
+
+class HelloPlugin implements Plugin, ValidatingPlugin {
+  @override
+  final manifest = const PluginManifest(
+    id: 'acme.hello',
+    displayName: 'Hello Plugin',
+    version: '0.1.0',
+    hostApiVersion: '>=0.1.0 <0.2.0',
+  );
+
+  @override
+  void setup(PluginHost host) {
+    host.registerRoute(
+      PluginRoute(
+        id: 'hello-plugin',
+        method: 'GET',
+        path: '/hello-plugin',
+        visibility: 'custom',
+        handler: (_) => Response.ok(
+          jsonEncode({'ok': true, 'basePath': host.metadata().basePath}),
+          headers: {'content-type': 'application/json'},
+        ),
+      ),
+    );
+  }
+
+  @override
+  List<PluginValidationResult> validate(PluginHost host) => const [];
+}
+```
 
 ---
 
@@ -69,7 +121,7 @@ See `example/example.dart` for the full implementation including Input, Output, 
 
 ```yaml
 dependencies:
-  modular_api: ^0.4.5
+  modular_api: ^0.4.7
 ```
 
 ```bash

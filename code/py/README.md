@@ -34,10 +34,10 @@ curl -X POST http://localhost:8080/api/greetings/hello \
 { "message": "Hello, World!" }
 ```
 
-**Docs** → `http://localhost:8080/docs`  
-**Health** → `http://localhost:8080/health`  
-**OpenAPI JSON** → `http://localhost:8080/openapi.json` *(also /openapi.yaml)*  
-**Metrics** → `http://localhost:8080/metrics` *(opt-in)*
+**Docs** → `http://localhost:8080/api/docs`
+**Health** → `http://localhost:8080/api/health`
+**OpenAPI JSON** → `http://localhost:8080/api/openapi.json` *(also /api/openapi.yaml)*
+**Metrics** → `http://localhost:8080/api/metrics` *(opt-in)*
 
 See `example/example.py` for the full implementation including Input, Output, UseCase with `validate()`, and the builder.
 
@@ -52,26 +52,79 @@ See `example/example.py` for the full implementation including Input, Output, Us
 - `ModularApi` + `ModuleBuilder` — module registration and routing
 - Constructor-based unit testing with fake dependency injection
 - `cors_middleware` — built-in CORS support
-- Scalar docs at `/docs` — auto-generated from registered use cases
-- OpenAPI spec at `/openapi.json` and `/openapi.yaml` — raw spec download
-- Health check at `GET /health` — [IETF Health Check Response Format](doc/health_check_guide.md)
-- Prometheus metrics at `GET /metrics` — [Prometheus exposition format](doc/metrics_guide.md)
+- All public endpoints resolve under the configured `base_path`.
+- Scalar docs at `/{basePath}/docs` — auto-generated from registered use cases
+- OpenAPI spec at `/{basePath}/openapi.json` and `/{basePath}/openapi.yaml` — raw spec download
+- Health check at `GET /{basePath}/health` — [IETF Health Check Response Format](doc/health_check_guide.md)
+- Prometheus metrics at `GET /{basePath}/metrics` — [Prometheus exposition format](doc/metrics_guide.md)
 - Structured JSON logging — Loki/Grafana compatible, [request-scoped with trace_id](doc/logger_guide.md)
 - All endpoints default to `POST` (configurable per use case)
 - Full type annotations with `py.typed` marker (PEP 561)
 
 ---
 
+## Plugin host
+
+The public plugin contract is available from the package exports and is already
+used by the official health, metrics, OpenAPI, and docs plugins.
+
+Current lifecycle behavior:
+
+- `api.plugin(...)` registers a plugin instance without running setup yet
+- `setup(host)` runs during `build()` in dependency order
+- `validate(host)` runs after registration freeze and can abort startup
+- `shutdown()` runs in reverse setup order on normal shutdown and on partial
+  startup rollback
+- plugin routes always resolve under the configured `base_path`
+- all three public middleware slots are active with deterministic ordering
+
+```python
+from modular_api import ModularApi, Plugin, PluginHost, PluginManifest, PluginRoute
+
+
+class HelloPlugin(Plugin):
+    manifest = PluginManifest(
+        id="acme.hello",
+        display_name="Hello Plugin",
+        version="0.1.0",
+        host_api_version=">=0.1.0 <0.2.0",
+    )
+
+    def setup(self, host: PluginHost) -> None:
+        host.register_route(
+            PluginRoute(
+                id="hello-plugin",
+                method="GET",
+                path="/hello-plugin",
+                visibility="custom",
+                handler=lambda _: {
+                    "status": 200,
+                    "body": {"ok": True, "basePath": host.metadata().base_path},
+                },
+            )
+        )
+
+    def validate(self, host: PluginHost):
+        return []
+
+
+api = ModularApi(base_path="/api")
+api.plugin(HelloPlugin())
+app = api.build()
+```
+
+---
+
 ## Installation
 
 ```bash
-pip install modular-api
+pip install macss-modular-api
 ```
 
 With Uvicorn for `api.serve()`:
 
 ```bash
-pip install modular-api[serve]
+pip install macss-modular-api[serve]
 ```
 
 ---
