@@ -39,6 +39,7 @@ from modular_api.core.module_builder import ModuleBuilder
 from modular_api.core.official_plugins import build_runtime_plugins, operational_route_paths
 from modular_api.core.plugin import Plugin, PluginHostError, RuntimePluginHost, order_plugins
 from modular_api.core.registry import api_registry
+from modular_api.graphql.runtime import GraphqlOptions
 
 
 class ModularApi:
@@ -59,6 +60,7 @@ class ModularApi:
         metrics_enabled: bool = False,
         metrics_path: str = "/metrics",
         log_level: LogLevel = LogLevel.info,
+        graphql: GraphqlOptions | None = None,
     ) -> None:
         self._base_path = base_path
         self._title = title
@@ -68,6 +70,7 @@ class ModularApi:
         self._metrics_enabled = metrics_enabled
         self._metrics_path = metrics_path
         self._log_level = log_level
+        self._graphql = graphql
 
         self._health_service = HealthService(version=version, release_id=self._release_id)
         self._module_routers: list[tuple[str, Router]] = []
@@ -156,6 +159,7 @@ class ModularApi:
                 version=self._version,
                 port=port,
                 health_service=self._health_service,
+                graphql=self._graphql,
                 registered_paths=[route.path for route in api_registry.routes],
                 servers=self._servers,
                 metric_registry=self._metric_registry,

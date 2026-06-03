@@ -55,6 +55,7 @@ from modular_api.graphql.read import (
 	SqlServerReadCompiler,
 	SqlSortDirection,
 )
+from modular_api.graphql.runtime import GraphqlOptions, graphql_default_read_executor_capability_id
 from modular_api.graphql.schema import GraphqlSchemaSdlGenerator
 
 __all__ = [
@@ -87,6 +88,7 @@ __all__ = [
 	"GraphqlMetadataSeverity",
 	"GraphqlObjectMetadata",
 	"GraphqlPublishedObject",
+	"GraphqlOptions",
 	"GraphqlRelationMetadata",
 	"GraphqlSchemaSdlGenerator",
 	"ReadExecutionContext",
@@ -108,4 +110,5 @@ __all__ = [
 	"SqlRelationBatchSelection",
 	"SqlServerReadCompiler",
 	"SqlSortDirection",
+	"graphql_default_read_executor_capability_id",
 ]

@@ -11,6 +11,7 @@ from modular_api.core.metrics.metric import Counter, Gauge, Histogram
 from modular_api.core.metrics.metric_registry import MetricRegistry
 from modular_api.core.metrics.metrics_middleware import metrics_middleware
 from modular_api.core.plugin import Capability, Plugin, PluginHost, PluginManifest, PluginMiddleware, PluginRoute
+from modular_api.graphql.runtime import GraphqlOptions, GraphqlRuntimePlugin
 from modular_api.openapi.openapi import build_openapi_spec, json_to_yaml
 from modular_api.openapi.swagger_docs import build_swagger_docs_html
 
@@ -51,6 +52,7 @@ def build_runtime_plugins(
     version: str,
     port: int,
     health_service: HealthService,
+    graphql: GraphqlOptions | None,
     registered_paths: list[str],
     servers: list[dict[str, str]] | None = None,
     metric_registry: MetricRegistry | None = None,
@@ -59,7 +61,10 @@ def build_runtime_plugins(
     request_duration: Histogram | None = None,
     metrics_path: str | None = None,
 ) -> list[Plugin]:
-    plugins: list[Plugin] = [_HealthRuntimePlugin(health_service)]
+    plugins: list[Plugin] = [
+        _HealthRuntimePlugin(health_service),
+        GraphqlRuntimePlugin(options=graphql, health_service=health_service),
+    ]
 
     if (
         metric_registry is not None
