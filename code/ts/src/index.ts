@@ -127,3 +127,23 @@ export type {
   GraphqlPublishedObject,
 } from './graphql/catalog/graphql_catalog_builder';
 export { GraphqlSchemaSdlGenerator } from './graphql/schema/graphql_schema_sdl_generator';
+export {
+  ReadExecutionContext,
+  RowSet,
+  SqlCollectionSelection,
+  SqlCountSelection,
+  SqlFilterCondition,
+  SqlFilterGroup,
+  SqlFilterGroupKind,
+  SqlFilterOperator,
+  SqlItemSelection,
+  SqlOrderByClause,
+  SqlPage,
+  SqlParameter,
+  SqlReadCommand,
+  SqlReadCommandPurpose,
+  SqlRelationBatchSelection,
+  SqlSortDirection,
+} from './graphql/read/sql_read_contract';
+export type { ReadExecutor } from './graphql/read/sql_read_contract';
+export { SqlCatalogReadDispatcher, SqlServerReadCompiler } from './graphql/read/sqlserver_read_compiler';
