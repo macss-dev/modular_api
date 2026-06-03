@@ -7,6 +7,7 @@ import 'package:modular_api/src/graphql/schema/graphql_schema_sdl_generator.dart
 typedef GraphqlCatalogFactory = FutureOr<GraphqlCatalog> Function();
 typedef GraphqlSdlFactory = String Function(GraphqlCatalog catalog);
 typedef GraphqlEventSink = FutureOr<void> Function(GraphqlRequestEvent event);
+typedef GraphqlSourceDigestFactory = FutureOr<String> Function();
 
 const graphqlDefaultSqlReadExecutorCapabilityId = 'modular_api.sql.read_executor';
 
@@ -42,6 +43,8 @@ final class GraphqlOptions {
     this.defaultLimit = 50,
     this.maxLimit = 200,
     this.onEvent,
+    this.artifactDirectory,
+    this.sourceDigestFactory,
     GraphqlSdlFactory? sdlFactory,
   }) : sdlFactory = sdlFactory ?? const GraphqlSchemaSdlGenerator().generate {
     if (executor != null && executionCapabilityId != null) {
@@ -60,6 +63,8 @@ final class GraphqlOptions {
   final int defaultLimit;
   final int maxLimit;
   final GraphqlEventSink? onEvent;
+  final String? artifactDirectory;
+  final GraphqlSourceDigestFactory? sourceDigestFactory;
   final GraphqlSdlFactory sdlFactory;
 
   String get resolvedExecutionCapabilityId =>

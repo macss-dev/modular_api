@@ -13,6 +13,7 @@ import 'package:modular_api/src/core/plugin.dart';
 import 'package:modular_api/src/graphql/catalog/graphql_catalog_builder.dart';
 import 'package:modular_api/src/graphql/read/sql_read_contract.dart';
 import 'package:modular_api/src/graphql/read/sqlserver_read_compiler.dart';
+import 'package:modular_api/src/graphql/runtime/graphql_artifacts.dart';
 import 'package:modular_api/src/graphql/runtime/graphql_runtime_health.dart';
 import 'package:modular_api/src/graphql/runtime/graphql_runtime_options.dart';
 import 'package:shelf/shelf.dart';
@@ -43,7 +44,7 @@ Future<Plugin> buildGraphqlRuntimePlugin({
 }) async {
   _validateGraphqlOptions(options);
 
-  final catalog = await _buildCatalog(options);
+  final catalog = await _resolveCatalog(options);
   final preparedRuntime = _buildGraphQlRuntime(catalog, options);
 
   return _GraphqlRuntimePlugin(
@@ -1186,4 +1187,29 @@ final class _RelationParentKey {
   final Map<String, Object?> values;
 
   String get cacheKey => jsonEncode(values.values.toList(growable: false));
+}
+
+Future<GraphqlCatalog> _resolveCatalog(GraphqlOptions options) async {
+  final artifactDirectory = options.artifactDirectory;
+  final sourceDigestFactory = options.sourceDigestFactory;
+  if (artifactDirectory != null && sourceDigestFactory != null) {
+    try {
+      final currentSourceDigest = await Future<String>.sync(sourceDigestFactory);
+      final prebuiltCatalog = await tryLoadGraphqlCatalogArtifacts(
+        artifactDirectory: artifactDirectory,
+        currentSourceDigest: currentSourceDigest,
+      );
+      if (prebuiltCatalog != null) {
+        return prebuiltCatalog;
+      }
+    } catch (error) {
+      throw PluginHostError(
+        'PLUGIN_VALIDATION_FAILED',
+        'GraphQL artifact loading failed: $error',
+        resourceId: 'graphql.artifacts',
+      );
+    }
+  }
+
+  return _buildCatalog(options);
 }

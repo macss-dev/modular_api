@@ -81,7 +81,13 @@ export 'src/graphql/runtime/graphql_runtime_options.dart'
         GraphqlOptions,
         GraphqlRequestEvent,
         GraphqlRequestPhase,
+        GraphqlSourceDigestFactory,
         GraphqlSdlFactory;
+export 'src/graphql/runtime/graphql_artifacts.dart'
+    show
+        GraphqlArtifactBundle,
+        GraphqlArtifactCompileError,
+        GraphqlArtifactCompiler;
 export 'src/graphql/sqlserver/physical_model.dart' show PhysicalObjectKind;
 
 // Metrics
