@@ -91,3 +91,13 @@ export type {
 } from './graphql/sqlserver/physical_model';
 export { SqlServerConnectionSettings } from './graphql/sqlserver/sql_server_connection_settings';
 export { SqlServerMetadataReader } from './graphql/sqlserver/sql_server_metadata_reader';
+export { GraphqlMetadataParser, GraphqlMetadataSeverity } from './graphql/metadata/graphql_metadata_parser';
+export type {
+  GraphqlFieldMetadata,
+  GraphqlMetadataDiagnostic,
+  GraphqlMetadataFile,
+  GraphqlMetadataLimit,
+  GraphqlMetadataParseResult,
+  GraphqlObjectMetadata,
+  GraphqlRelationMetadata,
+} from './graphql/metadata/graphql_metadata_parser';
