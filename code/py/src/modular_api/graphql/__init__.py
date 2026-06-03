@@ -34,6 +34,7 @@ from modular_api.graphql.metadata import (
 	GraphqlObjectMetadata,
 	GraphqlRelationMetadata,
 )
+from modular_api.graphql.schema import GraphqlSchemaSdlGenerator
 
 __all__ = [
 	"GraphqlCatalog",
@@ -66,4 +67,5 @@ __all__ = [
 	"GraphqlObjectMetadata",
 	"GraphqlPublishedObject",
 	"GraphqlRelationMetadata",
+	"GraphqlSchemaSdlGenerator",
 ]
