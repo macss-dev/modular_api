@@ -101,3 +101,28 @@ export type {
   GraphqlObjectMetadata,
   GraphqlRelationMetadata,
 } from './graphql/metadata/graphql_metadata_parser';
+export {
+  GraphqlCatalogBuildMode,
+  GraphqlCatalogBuilder,
+  GraphqlCatalogDiagnosticSeverity,
+  GraphqlCatalogFieldVisibility,
+  GraphqlCatalogIdentityMode,
+  GraphqlCatalogNaming,
+  GraphqlCatalogOrigin,
+  GraphqlCatalogPaginationMode,
+  GraphqlCatalogRelationCardinality,
+} from './graphql/catalog/graphql_catalog_builder';
+export type {
+  GraphqlCatalog,
+  GraphqlCatalogBuild,
+  GraphqlCatalogCapabilities,
+  GraphqlCatalogDiagnostic,
+  GraphqlCatalogField,
+  GraphqlCatalogGraphqlNames,
+  GraphqlCatalogIdentity,
+  GraphqlCatalogPagination,
+  GraphqlCatalogProvider,
+  GraphqlCatalogRelation,
+  GraphqlCatalogSource,
+  GraphqlPublishedObject,
+} from './graphql/catalog/graphql_catalog_builder';
