@@ -126,3 +126,4 @@ export type {
   GraphqlCatalogSource,
   GraphqlPublishedObject,
 } from './graphql/catalog/graphql_catalog_builder';
+export { GraphqlSchemaSdlGenerator } from './graphql/schema/graphql_schema_sdl_generator';
