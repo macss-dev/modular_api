@@ -80,3 +80,14 @@ export {
 
 // Swagger UI — inline HTML docs handler (PRD-003)
 export { swaggerDocsHandler } from './openapi/swagger_docs';
+
+// GraphQL SQL Server metadata surface
+export { PhysicalObjectKind } from './graphql/sqlserver/physical_model';
+export type {
+  PhysicalCatalog,
+  PhysicalField,
+  PhysicalObject,
+  PhysicalRelationSeed,
+} from './graphql/sqlserver/physical_model';
+export { SqlServerConnectionSettings } from './graphql/sqlserver/sql_server_connection_settings';
+export { SqlServerMetadataReader } from './graphql/sqlserver/sql_server_metadata_reader';
