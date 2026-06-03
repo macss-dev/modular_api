@@ -56,10 +56,16 @@ from modular_api.graphql.read import (
 	SqlSortDirection,
 )
 from modular_api.graphql.runtime import (
+	GraphqlArtifactBundle,
+	GraphqlArtifactCompileError,
+	GraphqlArtifactCompiler,
+	GraphqlArtifactLoadError,
 	GraphqlEventSink,
 	GraphqlOptions,
 	GraphqlRequestEvent,
 	GraphqlRequestPhase,
+	GraphqlSourceDigestFactory,
+	try_load_graphql_catalog_artifacts,
 	graphql_default_read_executor_capability_id,
 )
 from modular_api.graphql.schema import GraphqlSchemaSdlGenerator
@@ -94,10 +100,15 @@ __all__ = [
 	"GraphqlMetadataSeverity",
 	"GraphqlObjectMetadata",
 	"GraphqlPublishedObject",
+	"GraphqlArtifactBundle",
+	"GraphqlArtifactCompileError",
+	"GraphqlArtifactCompiler",
+	"GraphqlArtifactLoadError",
 	"GraphqlEventSink",
 	"GraphqlOptions",
 	"GraphqlRequestEvent",
 	"GraphqlRequestPhase",
+	"GraphqlSourceDigestFactory",
 	"GraphqlRelationMetadata",
 	"GraphqlSchemaSdlGenerator",
 	"ReadExecutionContext",
@@ -119,5 +130,6 @@ __all__ = [
 	"SqlRelationBatchSelection",
 	"SqlServerReadCompiler",
 	"SqlSortDirection",
+	"try_load_graphql_catalog_artifacts",
 	"graphql_default_read_executor_capability_id",
 ]

@@ -31,6 +31,7 @@ class GraphqlRequestEvent:
 
 
 GraphqlEventSink: TypeAlias = Callable[[GraphqlRequestEvent], Awaitable[None] | None]
+GraphqlSourceDigestFactory: TypeAlias = Callable[[], Awaitable[str] | str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +45,8 @@ class GraphqlOptions:
     default_limit: int = 50
     max_limit: int = 200
     on_event: GraphqlEventSink | None = None
+    artifact_directory: str | None = None
+    source_digest_factory: GraphqlSourceDigestFactory | None = None
     sdl_factory: Callable[[GraphqlCatalog], str] = GraphqlSchemaSdlGenerator().generate
 
     def __post_init__(self) -> None:

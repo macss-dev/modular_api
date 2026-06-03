@@ -56,6 +56,10 @@ from modular_api.graphql.runtime.graphql_runtime_options import (
     GraphqlRequestPhase,
     graphql_default_read_executor_capability_id,
 )
+from modular_api.graphql.runtime.graphql_artifacts import (
+    GraphqlArtifactLoadError,
+    resolve_catalog_from_artifacts_or_source,
+)
 
 _OFFICIAL_PLUGIN_HOST_RANGE = ">=0.1.0 <0.2.0"
 _GRAPHQL_TOTAL_COUNT_THUNK_KEY = object()
@@ -158,7 +162,9 @@ class GraphqlRuntimePlugin(Plugin):
             return [executor]
 
         try:
-            catalog = asyncio.run(self._options.catalog_factory())
+            catalog = resolve_catalog_from_artifacts_or_source(self._options)
+        except GraphqlArtifactLoadError as error:
+            return [self._validation_failure("graphql.artifacts", f"GraphQL artifact loading failed: {error}")]
         except Exception as error:  # noqa: BLE001
             return [self._validation_failure("graphql.catalog", f"GraphQL catalog construction failed: {error}")]
 
