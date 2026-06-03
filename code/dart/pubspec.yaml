@@ -12,6 +12,7 @@ environment:
   
 dependencies:
   dart_odbc: ^6.2.0
+  json5: ^0.8.2
   shelf: ^1.4.2
   shelf_router: ^1.1.4
 
