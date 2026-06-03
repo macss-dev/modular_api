@@ -1,5 +1,28 @@
 """GraphQL support surfaces for modular_api."""
 
+from modular_api.graphql.catalog import (
+	GraphqlCatalog,
+	GraphqlCatalogBuild,
+	GraphqlCatalogBuildMode,
+	GraphqlCatalogBuilder,
+	GraphqlCatalogCapabilities,
+	GraphqlCatalogDiagnostic,
+	GraphqlCatalogDiagnosticSeverity,
+	GraphqlCatalogField,
+	GraphqlCatalogFieldVisibility,
+	GraphqlCatalogGraphqlNames,
+	GraphqlCatalogIdentity,
+	GraphqlCatalogIdentityMode,
+	GraphqlCatalogNaming,
+	GraphqlCatalogOrigin,
+	GraphqlCatalogPagination,
+	GraphqlCatalogPaginationMode,
+	GraphqlCatalogProvider,
+	GraphqlCatalogRelation,
+	GraphqlCatalogRelationCardinality,
+	GraphqlCatalogSource,
+	GraphqlPublishedObject,
+)
 from modular_api.graphql.metadata import (
 	GraphqlFieldMetadata,
 	GraphqlMetadataDiagnostic,
@@ -13,6 +36,26 @@ from modular_api.graphql.metadata import (
 )
 
 __all__ = [
+	"GraphqlCatalog",
+	"GraphqlCatalogBuild",
+	"GraphqlCatalogBuildMode",
+	"GraphqlCatalogBuilder",
+	"GraphqlCatalogCapabilities",
+	"GraphqlCatalogDiagnostic",
+	"GraphqlCatalogDiagnosticSeverity",
+	"GraphqlCatalogField",
+	"GraphqlCatalogFieldVisibility",
+	"GraphqlCatalogGraphqlNames",
+	"GraphqlCatalogIdentity",
+	"GraphqlCatalogIdentityMode",
+	"GraphqlCatalogNaming",
+	"GraphqlCatalogOrigin",
+	"GraphqlCatalogPagination",
+	"GraphqlCatalogPaginationMode",
+	"GraphqlCatalogProvider",
+	"GraphqlCatalogRelation",
+	"GraphqlCatalogRelationCardinality",
+	"GraphqlCatalogSource",
 	"GraphqlFieldMetadata",
 	"GraphqlMetadataDiagnostic",
 	"GraphqlMetadataFile",
@@ -21,5 +64,6 @@ __all__ = [
 	"GraphqlMetadataParser",
 	"GraphqlMetadataSeverity",
 	"GraphqlObjectMetadata",
+	"GraphqlPublishedObject",
 	"GraphqlRelationMetadata",
 ]
