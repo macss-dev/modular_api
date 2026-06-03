@@ -131,7 +131,7 @@ export interface PluginHost {
 export interface Plugin {
   manifest: PluginManifest;
   setup(host: PluginHost): void;
-  validate?(host: PluginHost): PluginValidationResult[];
+  validate?(host: PluginHost): PluginValidationResult[] | Promise<PluginValidationResult[]>;
   shutdown?(): void | Promise<void>;
 }
 

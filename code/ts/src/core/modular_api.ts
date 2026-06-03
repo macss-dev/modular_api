@@ -16,6 +16,7 @@ import { unhandledRequestErrorHandler } from './unhandled_request_error_handler'
 import type { Counter, Gauge, Histogram } from './metrics/metric';
 import { buildRuntimePlugins, operationalRoutePaths } from './official_plugins';
 import { orderPlugins, PluginHostError, RuntimePluginHost, type Plugin } from './plugin';
+import type { GraphqlOptions } from '../graphql/runtime/graphql_runtime_options';
 
 export interface ModularApiOptions {
   /** Base path prefix for all module routes. Default: '/api' */
@@ -45,6 +46,8 @@ export interface ModularApiOptions {
    * When omitted, `serve()` generates `[{url: 'http://localhost:{port}'}]`.
    */
   servers?: Array<{ url: string; description?: string }>;
+  /** GraphQL runtime integration. Disabled by default. */
+  graphql?: GraphqlOptions;
 }
 
 /**
@@ -93,6 +96,7 @@ export class ModularApi {
 
   // OpenAPI
   private readonly servers?: Array<{ url: string; description?: string }>;
+  private readonly graphql?: GraphqlOptions;
 
   /** Public accessor for custom-metric registration. Undefined when metrics are disabled. */
   get metrics(): MetricsRegistrar | undefined {
@@ -119,6 +123,7 @@ export class ModularApi {
 
     // OpenAPI servers
     this.servers = options.servers;
+    this.graphql = options.graphql;
 
     if (this.metricsEnabled) {
       this.metricRegistry = new MetricRegistry();
@@ -217,6 +222,7 @@ export class ModularApi {
         port,
         servers: this.servers,
         healthService: this.healthService,
+        graphql: this.graphql,
         metrics:
           this.metricsEnabled &&
           this.metricRegistry &&
@@ -270,7 +276,9 @@ export class ModularApi {
       }
 
       pluginHost.freeze();
-      const validationResults = orderedPlugins.flatMap((plugin) => plugin.validate?.(pluginHost) ?? []);
+      const validationResults = (await Promise.all(
+        orderedPlugins.map(async (plugin) => plugin.validate?.(pluginHost) ?? []),
+      )).flat();
       pluginHost.assertValid(validationResults);
     } catch (error) {
       await pluginHost.shutdown();

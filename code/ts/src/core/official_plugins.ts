@@ -1,5 +1,7 @@
 import { buildOpenApiSpec, jsonToYaml } from '../openapi/openapi';
 import { buildSwaggerDocsHtml } from '../openapi/swagger_docs';
+import { GraphqlRuntimePlugin } from '../graphql/runtime/graphql_runtime_plugin';
+import type { GraphqlOptions } from '../graphql/runtime/graphql_runtime_options';
 import type { HealthService } from './health/health_service';
 import type { Counter, Gauge, Histogram } from './metrics/metric';
 import { metricsMiddleware } from './metrics/metrics_middleware';
@@ -25,6 +27,7 @@ interface BuildRuntimePluginsOptions {
   port: number;
   servers?: Array<{ url: string; description?: string }>;
   healthService: HealthService;
+  graphql?: GraphqlOptions;
   metrics?: {
     path: string;
     registry: MetricRegistry;
@@ -52,7 +55,10 @@ export function operationalRoutePaths(basePath: string, metricsPath?: string): O
 }
 
 export function buildRuntimePlugins(options: BuildRuntimePluginsOptions): Plugin[] {
-  const plugins: Plugin[] = [new HealthRuntimePlugin(options.healthService)];
+  const plugins: Plugin[] = [
+    new HealthRuntimePlugin(options.healthService),
+    new GraphqlRuntimePlugin(options.graphql, options.healthService),
+  ];
 
   if (options.metrics) {
     plugins.push(new MetricsRuntimePlugin(options.basePath, options.metrics));
