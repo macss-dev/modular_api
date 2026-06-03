@@ -67,9 +67,21 @@ export 'src/graphql/catalog/graphql_catalog_builder.dart'
         GraphqlCatalogSource,
         GraphqlPublishedObject;
 export 'src/graphql/read/sql_read_contract.dart'
-    show ReadExecutionContext, RowSet, SqlReadCommand, SqlReadExecutor;
+    show
+        ReadExecutionContext,
+        RowSet,
+        SqlParameter,
+        SqlReadCommand,
+        SqlReadCommandPurpose,
+        SqlReadExecutor;
 export 'src/graphql/runtime/graphql_runtime_options.dart'
-    show GraphqlCatalogFactory, GraphqlOptions, GraphqlSdlFactory;
+    show
+        GraphqlCatalogFactory,
+        GraphqlEventSink,
+        GraphqlOptions,
+        GraphqlRequestEvent,
+        GraphqlRequestPhase,
+        GraphqlSdlFactory;
 export 'src/graphql/sqlserver/physical_model.dart' show PhysicalObjectKind;
 
 // Metrics
