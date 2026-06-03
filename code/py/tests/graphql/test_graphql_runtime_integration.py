@@ -64,6 +64,8 @@ def test_graphql_options_defaults_introspection_false_max_depth_8_and_max_comple
     assert options.introspection_enabled is False
     assert options.max_depth == 8
     assert options.max_complexity == 500
+    assert options.default_limit == 50
+    assert options.max_limit == 200
     assert options.execution_capability_id is None
 
 
@@ -177,6 +179,58 @@ def test_startup_fails_when_max_complexity_is_invalid() -> None:
 
     assert excinfo.value.code == "PLUGIN_VALIDATION_FAILED"
     assert excinfo.value.resource_id == "graphql.maxComplexity"
+
+
+def test_startup_fails_when_default_limit_is_invalid() -> None:
+    api = ModularApi(
+        base_path="/api",
+        graphql=GraphqlOptions(
+            catalog_factory=_catalog_fixture_async,
+            executor=_NoopExecutor(),
+            default_limit=-1,
+        ),
+    )
+
+    with pytest.raises(PluginHostError) as excinfo:
+        api.build()
+
+    assert excinfo.value.code == "PLUGIN_VALIDATION_FAILED"
+    assert excinfo.value.resource_id == "graphql.defaultLimit"
+
+
+def test_startup_fails_when_max_limit_is_invalid() -> None:
+    api = ModularApi(
+        base_path="/api",
+        graphql=GraphqlOptions(
+            catalog_factory=_catalog_fixture_async,
+            executor=_NoopExecutor(),
+            max_limit=0,
+        ),
+    )
+
+    with pytest.raises(PluginHostError) as excinfo:
+        api.build()
+
+    assert excinfo.value.code == "PLUGIN_VALIDATION_FAILED"
+    assert excinfo.value.resource_id == "graphql.maxLimit"
+
+
+def test_startup_fails_when_default_limit_exceeds_max_limit() -> None:
+    api = ModularApi(
+        base_path="/api",
+        graphql=GraphqlOptions(
+            catalog_factory=_catalog_fixture_async,
+            executor=_NoopExecutor(),
+            default_limit=40,
+            max_limit=20,
+        ),
+    )
+
+    with pytest.raises(PluginHostError) as excinfo:
+        api.build()
+
+    assert excinfo.value.code == "PLUGIN_VALIDATION_FAILED"
+    assert excinfo.value.resource_id == "graphql.defaultLimit"
 
 
 def test_direct_executor_and_capability_id_are_mutually_exclusive() -> None:
