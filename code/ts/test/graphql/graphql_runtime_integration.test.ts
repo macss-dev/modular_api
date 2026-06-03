@@ -66,6 +66,8 @@ describe('GraphQL runtime integration', () => {
     expect(options.introspectionEnabled).toBe(false);
     expect(options.maxDepth).toBe(8);
     expect(options.maxComplexity).toBe(500);
+    expect(options.defaultLimit).toBe(50);
+    expect(options.maxLimit).toBe(200);
     expect(options.executionCapabilityId).toBeUndefined();
   });
 
@@ -178,6 +180,55 @@ describe('GraphQL runtime integration', () => {
     await expect(api.serve({ port: 0 })).rejects.toMatchObject<Partial<PluginHostError>>({
       code: 'PLUGIN_VALIDATION_FAILED',
       resourceId: 'graphql.maxComplexity',
+    });
+  });
+
+  it('startup fails when defaultLimit is invalid', async () => {
+    const api = new ModularApi({
+      basePath: '/api',
+      graphql: new GraphqlOptions({
+        catalogFactory: async () => catalogFixture(),
+        executor: new NoopExecutor(),
+        defaultLimit: -1,
+      }),
+    });
+
+    await expect(api.serve({ port: 0 })).rejects.toMatchObject<Partial<PluginHostError>>({
+      code: 'PLUGIN_VALIDATION_FAILED',
+      resourceId: 'graphql.defaultLimit',
+    });
+  });
+
+  it('startup fails when maxLimit is invalid', async () => {
+    const api = new ModularApi({
+      basePath: '/api',
+      graphql: new GraphqlOptions({
+        catalogFactory: async () => catalogFixture(),
+        executor: new NoopExecutor(),
+        maxLimit: 0,
+      }),
+    });
+
+    await expect(api.serve({ port: 0 })).rejects.toMatchObject<Partial<PluginHostError>>({
+      code: 'PLUGIN_VALIDATION_FAILED',
+      resourceId: 'graphql.maxLimit',
+    });
+  });
+
+  it('startup fails when defaultLimit exceeds maxLimit', async () => {
+    const api = new ModularApi({
+      basePath: '/api',
+      graphql: new GraphqlOptions({
+        catalogFactory: async () => catalogFixture(),
+        executor: new NoopExecutor(),
+        defaultLimit: 40,
+        maxLimit: 20,
+      }),
+    });
+
+    await expect(api.serve({ port: 0 })).rejects.toMatchObject<Partial<PluginHostError>>({
+      code: 'PLUGIN_VALIDATION_FAILED',
+      resourceId: 'graphql.defaultLimit',
     });
   });
 

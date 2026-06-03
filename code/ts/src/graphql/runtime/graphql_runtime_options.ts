@@ -2,6 +2,35 @@ import type { GraphqlCatalog } from '../catalog/graphql_catalog_builder';
 import type { ReadExecutor } from '../read/sql_read_contract';
 import { GraphqlSchemaSdlGenerator } from '../schema/graphql_schema_sdl_generator';
 
+export type GraphqlEventSink = (event: GraphqlRequestEvent) => void | Promise<void>;
+
+export enum GraphqlRequestPhase {
+  Started = 'started',
+  Completed = 'completed',
+}
+
+export class GraphqlRequestEvent {
+  readonly phase: GraphqlRequestPhase;
+  readonly requestId: string;
+  readonly method: string;
+  readonly path: string;
+  readonly statusCode?: number;
+
+  constructor(options: {
+    phase: GraphqlRequestPhase;
+    requestId: string;
+    method: string;
+    path: string;
+    statusCode?: number;
+  }) {
+    this.phase = options.phase;
+    this.requestId = options.requestId;
+    this.method = options.method;
+    this.path = options.path;
+    this.statusCode = options.statusCode;
+  }
+}
+
 export const graphqlDefaultReadExecutorCapabilityId = 'modular_api.sql.read_executor';
 
 export class GraphqlOptions {
@@ -11,6 +40,9 @@ export class GraphqlOptions {
   readonly introspectionEnabled: boolean;
   readonly maxDepth: number;
   readonly maxComplexity: number;
+  readonly defaultLimit: number;
+  readonly maxLimit: number;
+  readonly onEvent?: GraphqlEventSink;
   readonly sdlFactory: (catalog: GraphqlCatalog) => string;
 
   constructor(options: {
@@ -20,6 +52,9 @@ export class GraphqlOptions {
     introspectionEnabled?: boolean;
     maxDepth?: number;
     maxComplexity?: number;
+    defaultLimit?: number;
+    maxLimit?: number;
+    onEvent?: GraphqlEventSink;
     sdlFactory?: (catalog: GraphqlCatalog) => string;
   }) {
     if (options.executor && options.executionCapabilityId) {
@@ -34,6 +69,13 @@ export class GraphqlOptions {
     this.introspectionEnabled = options.introspectionEnabled ?? false;
     this.maxDepth = options.maxDepth ?? 8;
     this.maxComplexity = options.maxComplexity ?? 500;
+    this.defaultLimit = options.defaultLimit ?? 50;
+    this.maxLimit = options.maxLimit ?? 200;
+    this.onEvent = options.onEvent;
     this.sdlFactory = options.sdlFactory ?? ((catalog) => new GraphqlSchemaSdlGenerator().generate(catalog));
+  }
+
+  get resolvedExecutionCapabilityId(): string {
+    return this.executionCapabilityId ?? graphqlDefaultReadExecutorCapabilityId;
   }
 }

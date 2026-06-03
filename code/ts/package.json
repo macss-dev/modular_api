@@ -37,6 +37,7 @@
   "homepage": "https://github.com/macss-dev/modular_api/tree/main/code/ts#readme",
   "dependencies": {
     "express": "^4.22.1",
+    "graphql": "^16.11.0",
     "json5": "^2.2.3",
     "mssql": "^12.5.5"
   },

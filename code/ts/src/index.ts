@@ -127,7 +127,13 @@ export type {
   GraphqlPublishedObject,
 } from './graphql/catalog/graphql_catalog_builder';
 export { GraphqlSchemaSdlGenerator } from './graphql/schema/graphql_schema_sdl_generator';
-export { GraphqlOptions, graphqlDefaultReadExecutorCapabilityId } from './graphql/runtime/graphql_runtime_options';
+export {
+  GraphqlOptions,
+  GraphqlRequestEvent,
+  GraphqlRequestPhase,
+  graphqlDefaultReadExecutorCapabilityId,
+} from './graphql/runtime/graphql_runtime_options';
+export type { GraphqlEventSink } from './graphql/runtime/graphql_runtime_options';
 export {
   ReadExecutionContext,
   RowSet,
