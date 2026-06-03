@@ -44,6 +44,34 @@ export 'src/core/health/health_check.dart'
 export 'src/core/health/health_service.dart' show HealthService, HealthResponse;
 export 'src/core/health/health_handler.dart' show healthHandler;
 
+// GraphQL
+export 'src/graphql/catalog/graphql_catalog_builder.dart'
+    show
+        GraphqlCatalog,
+        GraphqlCatalogBuild,
+        GraphqlCatalogBuildMode,
+        GraphqlCatalogCapabilities,
+        GraphqlCatalogDiagnostic,
+        GraphqlCatalogDiagnosticSeverity,
+        GraphqlCatalogField,
+        GraphqlCatalogFieldVisibility,
+        GraphqlCatalogGraphqlNames,
+        GraphqlCatalogIdentity,
+        GraphqlCatalogIdentityMode,
+        GraphqlCatalogOrigin,
+        GraphqlCatalogPagination,
+        GraphqlCatalogPaginationMode,
+        GraphqlCatalogProvider,
+        GraphqlCatalogRelation,
+        GraphqlCatalogRelationCardinality,
+        GraphqlCatalogSource,
+        GraphqlPublishedObject;
+export 'src/graphql/read/sql_read_contract.dart'
+    show ReadExecutionContext, RowSet, SqlReadCommand, SqlReadExecutor;
+export 'src/graphql/runtime/graphql_runtime_options.dart'
+    show GraphqlCatalogFactory, GraphqlOptions, GraphqlSdlFactory;
+export 'src/graphql/sqlserver/physical_model.dart' show PhysicalObjectKind;
+
 // Metrics
 export 'src/core/metrics/metric.dart'
     show Counter, Gauge, Histogram, MetricSample;

@@ -5,6 +5,9 @@ import 'package:modular_api/src/core/metrics/metric.dart';
 import 'package:modular_api/src/core/metrics/metric_registry.dart';
 import 'package:modular_api/src/core/metrics/metrics_middleware.dart';
 import 'package:modular_api/src/core/plugin.dart';
+import 'package:modular_api/src/graphql/runtime/graphql_runtime_health.dart';
+import 'package:modular_api/src/graphql/runtime/graphql_runtime_options.dart';
+import 'package:modular_api/src/graphql/runtime/graphql_runtime_plugin.dart';
 import 'package:modular_api/src/openapi/openapi.dart';
 import 'package:modular_api/src/openapi/swagger_docs.dart';
 import 'package:shelf/shelf.dart';
@@ -54,10 +57,21 @@ Future<List<Plugin>> buildRuntimePlugins({
   Histogram? requestDuration,
   String? metricsPath,
   List<String> excludedMetricsRoutes = const [],
+  GraphqlOptions? graphql,
+  required GraphqlRuntimeState graphqlRuntimeState,
 }) async {
   final plugins = <Plugin>[
     _HealthRuntimePlugin(healthService: healthService),
   ];
+
+  if (graphql != null) {
+    plugins.add(
+      await buildGraphqlRuntimePlugin(
+        options: graphql,
+        runtimeState: graphqlRuntimeState,
+      ),
+    );
+  }
 
   if (metricRegistry != null &&
       requestsTotal != null &&

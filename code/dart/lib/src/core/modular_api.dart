@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:modular_api/modular_api.dart';
 import 'package:modular_api/src/core/error_response_middleware.dart';
+import 'package:modular_api/src/graphql/runtime/graphql_runtime_health.dart';
 import 'package:modular_api/src/core/logger/logging_middleware.dart';
 import 'package:modular_api/src/core/metrics/metric_registry.dart';
 import 'package:modular_api/src/core/official_plugins.dart';
@@ -21,6 +22,8 @@ class ModularApi {
   final String title;
   final String version;
   final HealthService _healthService;
+  final GraphqlOptions? graphql;
+  final GraphqlRuntimeState _graphqlRuntimeState = GraphqlRuntimeState.disabled();
 
   // ── Logger ──
   final LogLevel logLevel;
@@ -60,6 +63,7 @@ class ModularApi {
     this.basePath = '/api',
     this.title = 'Modular API',
     this.version = 'x.y.z',
+    this.graphql,
     String? releaseId,
     this.servers,
     this.metricsEnabled = false,
@@ -72,6 +76,8 @@ class ModularApi {
         ),
         _excludedMetricsRoutes = excludedMetricsRoutes ??
             ['/metrics', '/health', '/docs', '/docs/'] {
+      _healthService.addHealthCheck(GraphqlRuntimeHealthCheck(_graphqlRuntimeState));
+
     if (metricsEnabled) {
       _metricRegistry = MetricRegistry();
       _metricsRegistrar = MetricsRegistrar(_metricRegistry!);
@@ -128,6 +134,8 @@ class ModularApi {
     required int port,
     Future<void> Function(Router root)? onBeforeServe,
   }) async {
+    _graphqlRuntimeState.markDisabled();
+
     final operationalPaths = operationalRoutePaths(
       basePath: basePath,
       metricsPath: metricsEnabled ? metricsPath : null,
@@ -147,6 +155,8 @@ class ModularApi {
         requestDuration: _httpRequestDuration,
         metricsPath: metricsEnabled ? metricsPath : null,
         excludedMetricsRoutes: _excludedMetricsRoutes,
+        graphql: graphql,
+        graphqlRuntimeState: _graphqlRuntimeState,
       ),
     ];
 
