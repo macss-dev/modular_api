@@ -133,7 +133,14 @@ export {
   GraphqlRequestPhase,
   graphqlDefaultReadExecutorCapabilityId,
 } from './graphql/runtime/graphql_runtime_options';
-export type { GraphqlEventSink } from './graphql/runtime/graphql_runtime_options';
+export type { GraphqlEventSink, GraphqlSourceDigestFactory } from './graphql/runtime/graphql_runtime_options';
+export {
+  GraphqlArtifactBundle,
+  GraphqlArtifactCompileError,
+  GraphqlArtifactCompiler,
+  GraphqlArtifactLoadError,
+  tryLoadGraphqlCatalogArtifacts,
+} from './graphql/runtime/graphql_artifacts';
 export {
   ReadExecutionContext,
   RowSet,

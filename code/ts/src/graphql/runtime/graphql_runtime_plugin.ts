@@ -49,6 +49,7 @@ import {
   GraphqlRequestPhase,
   graphqlDefaultReadExecutorCapabilityId,
 } from './graphql_runtime_options';
+import { GraphqlArtifactLoadError, resolveCatalogFromArtifactsOrSource } from './graphql_artifacts';
 
 type GraphqlRuntimeStatus = 'disabled' | 'ready';
 type RuntimeFieldResolver = (
@@ -171,7 +172,7 @@ export class GraphqlRuntimePlugin implements Plugin {
     }
 
     try {
-      const catalog = await this.options.catalogFactory();
+      const catalog = await resolveCatalogFromArtifactsOrSource({ graphql: this.options });
       const sdl = this.options.sdlFactory(catalog);
       validateGeneratedSdl(sdl);
 
@@ -193,6 +194,11 @@ export class GraphqlRuntimePlugin implements Plugin {
 
       return [];
     } catch (error) {
+      if (error instanceof GraphqlArtifactLoadError) {
+        return [
+          this.validationFailure('graphql.artifacts', `GraphQL artifact loading failed: ${error.message}`),
+        ];
+      }
       const message = error instanceof Error ? error.message : String(error);
       const resourceId = message.startsWith('GraphQL schema generation failed:') ? 'graphql.schema' : 'graphql.catalog';
       return [

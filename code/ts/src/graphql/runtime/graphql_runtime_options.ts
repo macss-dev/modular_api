@@ -3,6 +3,7 @@ import type { ReadExecutor } from '../read/sql_read_contract';
 import { GraphqlSchemaSdlGenerator } from '../schema/graphql_schema_sdl_generator';
 
 export type GraphqlEventSink = (event: GraphqlRequestEvent) => void | Promise<void>;
+export type GraphqlSourceDigestFactory = () => string | Promise<string>;
 
 export enum GraphqlRequestPhase {
   Started = 'started',
@@ -43,6 +44,8 @@ export class GraphqlOptions {
   readonly defaultLimit: number;
   readonly maxLimit: number;
   readonly onEvent?: GraphqlEventSink;
+  readonly artifactDirectory?: string;
+  readonly sourceDigestFactory?: GraphqlSourceDigestFactory;
   readonly sdlFactory: (catalog: GraphqlCatalog) => string;
 
   constructor(options: {
@@ -55,6 +58,8 @@ export class GraphqlOptions {
     defaultLimit?: number;
     maxLimit?: number;
     onEvent?: GraphqlEventSink;
+    artifactDirectory?: string;
+    sourceDigestFactory?: GraphqlSourceDigestFactory;
     sdlFactory?: (catalog: GraphqlCatalog) => string;
   }) {
     if (options.executor && options.executionCapabilityId) {
@@ -72,6 +77,8 @@ export class GraphqlOptions {
     this.defaultLimit = options.defaultLimit ?? 50;
     this.maxLimit = options.maxLimit ?? 200;
     this.onEvent = options.onEvent;
+    this.artifactDirectory = options.artifactDirectory;
+    this.sourceDigestFactory = options.sourceDigestFactory;
     this.sdlFactory = options.sdlFactory ?? ((catalog) => new GraphqlSchemaSdlGenerator().generate(catalog));
   }
 
