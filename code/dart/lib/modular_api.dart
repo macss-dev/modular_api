@@ -3,6 +3,8 @@
 
 library;
 
+export 'src/version.dart' show modularApiPackageVersion;
+
 // Shelf types
 export 'package:shelf/shelf.dart' show Middleware, Handler, Request, Response;
 
@@ -50,6 +52,7 @@ export 'src/graphql/catalog/graphql_catalog_builder.dart'
         GraphqlCatalog,
         GraphqlCatalogBuild,
         GraphqlCatalogBuildMode,
+        GraphqlCatalogBuilder,
         GraphqlCatalogCapabilities,
         GraphqlCatalogDiagnostic,
         GraphqlCatalogDiagnosticSeverity,
@@ -58,6 +61,7 @@ export 'src/graphql/catalog/graphql_catalog_builder.dart'
         GraphqlCatalogGraphqlNames,
         GraphqlCatalogIdentity,
         GraphqlCatalogIdentityMode,
+        GraphqlCatalogNaming,
         GraphqlCatalogOrigin,
         GraphqlCatalogPagination,
         GraphqlCatalogPaginationMode,
@@ -66,6 +70,17 @@ export 'src/graphql/catalog/graphql_catalog_builder.dart'
         GraphqlCatalogRelationCardinality,
         GraphqlCatalogSource,
         GraphqlPublishedObject;
+export 'src/graphql/metadata/graphql_metadata_parser.dart'
+    show
+        GraphqlFieldMetadata,
+        GraphqlMetadataDiagnostic,
+        GraphqlMetadataFile,
+        GraphqlMetadataLimit,
+        GraphqlMetadataParseResult,
+        GraphqlMetadataParser,
+        GraphqlMetadataSeverity,
+        GraphqlObjectMetadata,
+        GraphqlRelationMetadata;
 export 'src/graphql/read/sql_read_contract.dart'
     show
         ReadExecutionContext,
@@ -88,7 +103,17 @@ export 'src/graphql/runtime/graphql_artifacts.dart'
         GraphqlArtifactBundle,
         GraphqlArtifactCompileError,
         GraphqlArtifactCompiler;
-export 'src/graphql/sqlserver/physical_model.dart' show PhysicalObjectKind;
+export 'src/graphql/sqlserver/physical_model.dart'
+    show
+        PhysicalCatalog,
+        PhysicalField,
+        PhysicalObject,
+        PhysicalObjectKind,
+        PhysicalRelationSeed;
+export 'src/graphql/sqlserver/sql_server_connection_settings.dart'
+    show SqlServerConnectionSettings;
+export 'src/graphql/sqlserver/sql_server_metadata_reader.dart'
+    show SqlServerMetadataReader;
 
 // Metrics
 export 'src/core/metrics/metric.dart'
