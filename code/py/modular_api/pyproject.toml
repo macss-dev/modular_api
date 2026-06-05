@@ -44,15 +44,16 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/macss-dev/modular_api"
-Repository = "https://github.com/macss-dev/modular_api/tree/main/code/py"
+Repository = "https://github.com/macss-dev/modular_api/tree/main/code/py/modular_api"
 Issues = "https://github.com/macss-dev/modular_api/issues"
-Documentation = "https://github.com/macss-dev/modular_api/tree/main/code/py#readme"
+Documentation = "https://github.com/macss-dev/modular_api/tree/main/code/py/modular_api#readme"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 asyncio_mode = "auto"
 
 [tool.pyright]

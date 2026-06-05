@@ -42,19 +42,21 @@ class HelloOutput extends Output {
 
 /// Loads a JSON fixture relative to the monorepo root.
 Map<String, dynamic> loadFixture(String name) {
-  // From dart/test/ → ../../tests/fixtures/
-  final path = '${Directory.current.path}/../tests/fixtures/$name';
-  final file = File(path);
-  if (!file.existsSync()) {
-    // When running from dart/ directory
-    final altPath = '${Directory.current.path}/tests/fixtures/$name';
-    final altFile = File(altPath);
-    if (altFile.existsSync()) {
-      return jsonDecode(altFile.readAsStringSync()) as Map<String, dynamic>;
+  final candidates = <String>[
+    '${Directory.current.path}/../../tests/fixtures/$name',
+    '${Directory.current.path}/../tests/fixtures/$name',
+    '${Directory.current.path}/tests/fixtures/$name',
+    '${Directory.current.path}/code/tests/fixtures/$name',
+  ];
+
+  for (final candidate in candidates) {
+    final file = File(candidate);
+    if (file.existsSync()) {
+      return jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
     }
-    throw FileSystemException('Fixture not found', path);
   }
-  return jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+
+  throw FileSystemException('Fixture not found', candidates.first);
 }
 
 void main() {

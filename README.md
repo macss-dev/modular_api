@@ -15,9 +15,24 @@ GraphQL is a future official plugin. When enabled it will provide the query side
 ```
 modular_api/
   code/
-    dart/        -> pub.dev: modular_api
-    ts/          -> npm: @macss/modular-api
-    py/          -> PyPI: macss-modular-api
+    dart/
+      modular_api/               -> pub.dev: modular_api
+      modular_api_rest_client/
+      modular_api_graphql_client/
+      modular_api_sqlserver/
+      modular_api_postgres/
+    ts/
+      modular_api/               -> npm: @macss/modular-api
+      modular_api_rest_client/
+      modular_api_graphql_client/
+      modular_api_sqlserver/
+      modular_api_postgres/
+    py/
+      modular_api/               -> PyPI: macss-modular-api
+      modular_api_rest_client/
+      modular_api_graphql_client/
+      modular_api_sqlserver/
+      modular_api_postgres/
     docs-ui/     -> npm: @macss/docs-ui
     tests/       -> cross-language parity tests
   docs/          -> public product and SDK documentation
@@ -32,9 +47,9 @@ Each SDK is independently versioned and published. The public API and external b
 
 | SDK | Package | Registry | Status |
 |---|---|---|---|
-| `code/dart/` | `modular_api` | [pub.dev](https://pub.dev/packages/modular_api) | ✅ Published |
-| `code/ts/` | `@macss/modular-api` | [npm](https://www.npmjs.com/package/@macss/modular-api) | ✅ Published |
-| `code/py/` | `macss-modular-api` | [PyPI](https://pypi.org/project/macss-modular-api/) | ✅ Published |
+| `code/dart/modular_api/` | `modular_api` | [pub.dev](https://pub.dev/packages/modular_api) | ✅ Published |
+| `code/ts/modular_api/` | `@macss/modular-api` | [npm](https://www.npmjs.com/package/@macss/modular-api) | ✅ Published |
+| `code/py/modular_api/` | `macss-modular-api` | [PyPI](https://pypi.org/project/macss-modular-api/) | ✅ Published |
 
 ---
 
@@ -146,7 +161,7 @@ curl -X POST http://localhost:8080/api/greetings/hello \
 # -> {"message": "Hello, World!"}
 ```
 
-See `code/dart/example/`, `code/ts/example/`, and `code/py/example/` for complete examples.
+See `code/dart/modular_api/example/`, `code/ts/modular_api/example/`, and `code/py/modular_api/example/` for complete examples.
 
 ---
 

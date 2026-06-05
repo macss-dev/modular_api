@@ -17,7 +17,7 @@ from modules.greetings.usecases.hello_world import HelloWorldInput, HelloWorldOu
 
 from modular_api.core.usecase import Input
 
-_FIXTURES = Path(__file__).resolve().parent.parent.parent / "tests" / "fixtures"
+_FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
 
 
 def _load_fixture(name: str) -> dict[str, object]:

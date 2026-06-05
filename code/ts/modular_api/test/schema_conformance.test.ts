@@ -33,7 +33,7 @@ class HelloOutput extends Output {
   }
 }
 
-const fixturesDir = resolve(__dirname, '../..', 'tests', 'fixtures');
+const fixturesDir = resolve(__dirname, '../../..', 'tests', 'fixtures');
 
 function loadFixture(name: string): Record<string, unknown> {
   return JSON.parse(readFileSync(resolve(fixturesDir, name), 'utf-8'));

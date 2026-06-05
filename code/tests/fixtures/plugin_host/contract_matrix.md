@@ -7,10 +7,10 @@ that will be implemented incrementally across Dart, TypeScript, and Python.
 
 | Rule ID | Contract slice | Stage | Dart | TypeScript | Python |
 | --- | --- | --- | --- | --- | --- |
-| PH-001 | `ModularApi` exposes a public `.plugin()` API | 0 -> 1 | `code/dart/test/plugin_host/plugin_host_stage0_red_test.dart` | `code/ts/test/plugin_host/plugin_host.stage0.red.test.ts` | `code/py/tests/plugin_host/test_stage0_plugin_host_red.py` |
-| PH-002 | Public plugin contract types are exported to SDK consumers | 0 -> 1 | `code/dart/test/plugin_host/plugin_host_stage0_red_test.dart` | `code/ts/test/plugin_host/plugin_host.stage0.red.test.ts` | `code/py/tests/plugin_host/test_stage0_plugin_host_red.py` |
-| PH-003 | Plugin manifests are captured at registration time without running setup | 0 -> 1 | `code/dart/test/plugin_host/plugin_host_stage0_red_test.dart` | `code/ts/test/plugin_host/plugin_host.stage0.red.test.ts` | `code/py/tests/plugin_host/test_stage0_plugin_host_red.py` |
-| PH-004 | Plugin routes resolve under the shared `basePath` only | 0 -> 3 | `code/dart/test/plugin_host/plugin_host_stage0_red_test.dart` | `code/ts/test/plugin_host/plugin_host.stage0.red.test.ts` | `code/py/tests/plugin_host/test_stage0_plugin_host_red.py` |
+| PH-001 | `ModularApi` exposes a public `.plugin()` API | 0 -> 1 | `code/dart/modular_api/test/plugin_host/plugin_host_stage0_red_test.dart` | `code/ts/modular_api/test/plugin_host/plugin_host.stage0.red.test.ts` | `code/py/modular_api/tests/plugin_host/test_stage0_plugin_host_red.py` |
+| PH-002 | Public plugin contract types are exported to SDK consumers | 0 -> 1 | `code/dart/modular_api/test/plugin_host/plugin_host_stage0_red_test.dart` | `code/ts/modular_api/test/plugin_host/plugin_host.stage0.red.test.ts` | `code/py/modular_api/tests/plugin_host/test_stage0_plugin_host_red.py` |
+| PH-003 | Plugin manifests are captured at registration time without running setup | 0 -> 1 | `code/dart/modular_api/test/plugin_host/plugin_host_stage0_red_test.dart` | `code/ts/modular_api/test/plugin_host/plugin_host.stage0.red.test.ts` | `code/py/modular_api/tests/plugin_host/test_stage0_plugin_host_red.py` |
+| PH-004 | Plugin routes resolve under the shared `basePath` only | 0 -> 3 | `code/dart/modular_api/test/plugin_host/plugin_host_stage0_red_test.dart` | `code/ts/modular_api/test/plugin_host/plugin_host.stage0.red.test.ts` | `code/py/modular_api/tests/plugin_host/test_stage0_plugin_host_red.py` |
 
 ## Forward Stage Mapping
 
