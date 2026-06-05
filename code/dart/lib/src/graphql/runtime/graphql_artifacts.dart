@@ -134,7 +134,7 @@ String _artifactPath(String directory, String fileName) {
 }
 
 String _prettyJson(Object? payload) {
-  return const JsonEncoder.withIndent('  ').convert(_canonicalize(payload)) + '\n';
+  return '${const JsonEncoder.withIndent('  ').convert(_canonicalize(payload))}\n';
 }
 
 String _normalizedSchema(String schema) {

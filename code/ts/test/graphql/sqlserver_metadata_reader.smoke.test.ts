@@ -9,6 +9,25 @@ import {
 } from '../../src';
 
 describe('SqlServerMetadataReader smoke', () => {
+  it('explains how to enable the optional mssql dependency when the driver is unavailable', async () => {
+    const reader = new SqlServerMetadataReader({
+      connection: new SqlServerConnectionSettings({
+        host: '127.0.0.1',
+        port: 14333,
+        database: 'modular_api_graphql_v1',
+        username: 'sa',
+        password: 'ModularApi_dev_StrongPass1',
+      }),
+      sqlModuleLoader: () => {
+        throw new Error("Cannot find module 'mssql'");
+      },
+    });
+
+    await expect(reader.introspect()).rejects.toThrow(
+      'SqlServerMetadataReader requires the optional "mssql" package. Install it to use SQL Server introspection.',
+    );
+  });
+
   it(
     'returns table columns with normalized native types, primary keys, and foreign keys',
     async () => {

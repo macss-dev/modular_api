@@ -28,6 +28,9 @@ contract documents:
 - provider-compiled read commands executed through `SqlReadExecutor`
 - fail-fast startup and shared health reporting
 
+Post-v1 external database-driver isolation is tracked separately in
+[graphql_dependency_boundary_tdd_plan.md](graphql_dependency_boundary_tdd_plan.md).
+
 ---
 
 ## 2. Delivery Strategy

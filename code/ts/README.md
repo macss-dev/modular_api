@@ -125,6 +125,12 @@ await api.serve({ port: 8080 });
 npm install @macss/modular-api
 ```
 
+If you use `SqlServerMetadataReader` for SQL Server introspection, install `mssql` explicitly:
+
+```bash
+npm install @macss/modular-api mssql
+```
+
 ---
 
 ## Error handling

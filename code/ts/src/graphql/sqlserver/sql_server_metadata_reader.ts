@@ -1,5 +1,3 @@
-import sql from 'mssql';
-
 import {
   PhysicalObjectKind,
   type PhysicalCatalog,
@@ -8,6 +6,32 @@ import {
   type PhysicalRelationSeed,
 } from './physical_model';
 import { SqlServerConnectionSettings } from './sql_server_connection_settings';
+
+type SqlServerConnectionConfig = {
+  user: string;
+  password: string;
+  server: string;
+  port: number;
+  database: string;
+  options: {
+    encrypt: boolean;
+    trustServerCertificate: boolean;
+  };
+};
+
+type SqlServerRequestLike = {
+  query<Row extends object>(query: string): Promise<{ recordset: Row[] }>;
+};
+
+type SqlServerConnectionPoolLike = {
+  connect(): Promise<void>;
+  close(): Promise<void>;
+  request(): SqlServerRequestLike;
+};
+
+type SqlServerModuleLike = {
+  ConnectionPool: new (config: SqlServerConnectionConfig) => SqlServerConnectionPoolLike;
+};
 
 type ObjectRow = {
   schema_name: string;
@@ -62,16 +86,24 @@ type MutableRelation = {
 
 export class SqlServerMetadataReader {
   private readonly connection: SqlServerConnectionSettings;
-  private readonly sqlModule: typeof sql;
+  private readonly sqlModuleLoader: () => SqlServerModuleLike;
 
-  constructor(options: { connection: SqlServerConnectionSettings; sqlModule?: typeof sql }) {
+  constructor(options: {
+    connection: SqlServerConnectionSettings;
+    sqlModule?: SqlServerModuleLike;
+    sqlModuleLoader?: () => SqlServerModuleLike;
+  }) {
     this.connection = options.connection;
-    this.sqlModule = options.sqlModule ?? sql;
+    this.sqlModuleLoader =
+      options.sqlModule == null
+        ? (options.sqlModuleLoader ?? defaultSqlModuleLoader)
+        : () => options.sqlModule as SqlServerModuleLike;
   }
 
   async introspect(options: { schemaNames?: Iterable<string> } = {}): Promise<PhysicalCatalog> {
     const normalizedSchemaNames = Array.from(options.schemaNames ?? []).sort();
-    const pool = new this.sqlModule.ConnectionPool(buildConnectionConfig(this.connection));
+    const sqlModule = loadSqlModule(this.sqlModuleLoader);
+    const pool = new sqlModule.ConnectionPool(buildConnectionConfig(this.connection));
 
     await pool.connect();
     try {
@@ -91,7 +123,10 @@ export class SqlServerMetadataReader {
   }
 }
 
-async function loadObjects(pool: sql.ConnectionPool, schemaNames: readonly string[]): Promise<Map<string, MutablePhysicalObject>> {
+async function loadObjects(
+  pool: SqlServerConnectionPoolLike,
+  schemaNames: readonly string[],
+): Promise<Map<string, MutablePhysicalObject>> {
   const rows = await runMetadataQuery<ObjectRow>(
     pool,
     'SQL Server objects',
@@ -129,7 +164,7 @@ ORDER BY s.name, o.name;
 }
 
 async function loadFields(
-  pool: sql.ConnectionPool,
+  pool: SqlServerConnectionPoolLike,
   schemaNames: readonly string[],
   objectsById: Map<string, MutablePhysicalObject>,
 ): Promise<void> {
@@ -172,7 +207,7 @@ ORDER BY s.name, o.name, c.column_id;
 }
 
 async function loadIdentityFields(
-  pool: sql.ConnectionPool,
+  pool: SqlServerConnectionPoolLike,
   schemaNames: readonly string[],
   objectsById: Map<string, MutablePhysicalObject>,
 ): Promise<void> {
@@ -208,7 +243,7 @@ ORDER BY s.name, o.name, ic.key_ordinal;
 }
 
 async function loadRelations(
-  pool: sql.ConnectionPool,
+  pool: SqlServerConnectionPoolLike,
   schemaNames: readonly string[],
   objectsById: Map<string, MutablePhysicalObject>,
 ): Promise<void> {
@@ -281,7 +316,7 @@ ORDER BY source_schema.name, source_object.name, fk.name, fkc.constraint_column_
 }
 
 async function runMetadataQuery<Row extends object>(
-  pool: sql.ConnectionPool,
+  pool: SqlServerConnectionPoolLike,
   label: string,
   query: string,
 ): Promise<Row[]> {
@@ -294,7 +329,7 @@ async function runMetadataQuery<Row extends object>(
   }
 }
 
-function buildConnectionConfig(connection: SqlServerConnectionSettings): sql.config {
+function buildConnectionConfig(connection: SqlServerConnectionSettings): SqlServerConnectionConfig {
   return {
     user: connection.username,
     password: connection.password,
@@ -306,6 +341,35 @@ function buildConnectionConfig(connection: SqlServerConnectionSettings): sql.con
       trustServerCertificate: true,
     },
   };
+}
+
+function defaultSqlModuleLoader(): SqlServerModuleLike {
+  try {
+    const loaded = require('mssql') as SqlServerModuleLike & { default?: SqlServerModuleLike };
+    return loaded.default ?? loaded;
+  } catch (error) {
+    throw toMissingSqlServerDriverError(error);
+  }
+}
+
+function loadSqlModule(loader: () => SqlServerModuleLike): SqlServerModuleLike {
+  try {
+    return loader();
+  } catch (error) {
+    throw toMissingSqlServerDriverError(error);
+  }
+}
+
+function toMissingSqlServerDriverError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes('SqlServerMetadataReader requires the optional "mssql" package.')) {
+    return error instanceof Error ? error : new Error(message);
+  }
+
+  return new Error(
+    'SqlServerMetadataReader requires the optional "mssql" package. Install it to use SQL Server introspection. ' +
+      `Original error: ${message}`,
+  );
 }
 
 function buildPhysicalObject(object: MutablePhysicalObject): PhysicalObject {

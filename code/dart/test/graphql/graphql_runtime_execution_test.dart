@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:modular_api/modular_api.dart';
 import 'package:modular_api/src/core/modular_api.dart' show apiRegistry;
-import 'package:modular_api/src/graphql/read/sql_read_contract.dart'
-  show SqlReadCommandPurpose;
 import 'package:test/test.dart';
 
 void main() {

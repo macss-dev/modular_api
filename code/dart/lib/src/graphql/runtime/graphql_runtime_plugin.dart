@@ -16,7 +16,6 @@ import 'package:modular_api/src/graphql/read/sqlserver_read_compiler.dart';
 import 'package:modular_api/src/graphql/runtime/graphql_artifacts.dart';
 import 'package:modular_api/src/graphql/runtime/graphql_runtime_health.dart';
 import 'package:modular_api/src/graphql/runtime/graphql_runtime_options.dart';
-import 'package:shelf/shelf.dart';
 
 const _graphQlPluginHostRange = '>=0.1.0 <0.2.0';
 const _graphQlRequestIdContextKey = 'modular_api.graphql.requestId';
