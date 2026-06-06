@@ -7,6 +7,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Documentation
 
+## [0.4.8] - 2026-06-06
+
+### Changed
+
+- **Clean-room driver isolation** — the base package no longer declares `mssql` or `pg` in its manifest, so `@macss/modular-api` installs cleanly without concrete database drivers.
+- **Optional SQL Server introspection** — SQL Server metadata support now relies on lazy driver loading and explains how to install `mssql` only when that engine-specific feature is used.
+
 ## [0.4.7] - 2026-06-01
 
 ### Changed
