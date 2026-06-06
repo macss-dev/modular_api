@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.8] - 2026-06-06
+
+### Changed
+
+- **Clean-room driver isolation** — the base package no longer declares `pyodbc` or `psycopg` in its published metadata, so `macss-modular-api` remains installable without concrete database drivers.
+- **Optional SQL Server introspection** — `SqlServerMetadataReader` now loads `pyodbc` lazily and raises a clear actionable error only when SQL Server introspection is actually invoked without the optional driver.
+
 ## [0.4.7] - 2026-06-01
 
 ### Changed

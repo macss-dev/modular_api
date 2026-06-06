@@ -6,6 +6,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Documentation
 
+## [0.4.8] - 2026-06-06
+
+### Changed
+
+- **Clean-room driver isolation** — the base package no longer declares concrete SQL Server or Postgres drivers, so REST-only and GraphQL-base consumers can install/import `modular_api` without external database drivers.
+- **Public physical model kept in core** — `PhysicalCatalog`, `PhysicalObject`, `PhysicalField`, `PhysicalRelationSeed`, and `PhysicalObjectKind` remain exported from the base package as GraphQL-base contracts.
+
+### Removed
+
+- **SQL Server metadata reader ownership from core** — the concrete SQL Server metadata reader and connection settings moved out of `modular_api` and into `modular_api_sqlserver`, keeping driver ownership at the engine-package boundary.
+
 ## [0.4.7] - 2026-06-01
 
 ### Changed
