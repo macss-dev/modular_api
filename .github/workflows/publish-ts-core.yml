@@ -48,7 +48,7 @@ jobs:
           fi
 
       - name: Run tests
-        run: npm test -- --exclude test/graphql/sqlserver*.smoke.test.ts
+        run: npm test -- --exclude "**/sqlserver*.smoke.test.ts"
 
       - name: Build package
         run: npm run build
