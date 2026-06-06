@@ -2,7 +2,7 @@ import 'package:modular_api/modular_api.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('public graphql surface exposes metadata, sqlserver and catalog building primitives', () {
+  test('public graphql surface exposes metadata and catalog building primitives', () {
     const parser = GraphqlMetadataParser();
     const physicalCatalog = PhysicalCatalog(
       objects: <PhysicalObject>[
@@ -53,13 +53,5 @@ void main() {
 
     expect(catalog.provider.engine, 'sqlserver');
     expect(catalog.objects.single.id, 'sales.Customer');
-
-    final connection = SqlServerConnectionSettings.fromEnvironment(
-      environment: const {'MODULAR_API_SQLSERVER_HOST': 'db.local'},
-    );
-    final reader = SqlServerMetadataReader(connection: connection);
-
-    expect(connection.host, 'db.local');
-    expect(reader, isA<SqlServerMetadataReader>());
   });
 }

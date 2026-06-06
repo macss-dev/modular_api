@@ -110,10 +110,6 @@ export 'src/graphql/sqlserver/physical_model.dart'
         PhysicalObject,
         PhysicalObjectKind,
         PhysicalRelationSeed;
-export 'src/graphql/sqlserver/sql_server_connection_settings.dart'
-    show SqlServerConnectionSettings;
-export 'src/graphql/sqlserver/sql_server_metadata_reader.dart'
-    show SqlServerMetadataReader;
 
 // Metrics
 export 'src/core/metrics/metric.dart'
