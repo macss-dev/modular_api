@@ -36,7 +36,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
+          rm -rf node_modules package-lock.json
           npm install --include=optional
 
       - name: Ensure tag matches package version
