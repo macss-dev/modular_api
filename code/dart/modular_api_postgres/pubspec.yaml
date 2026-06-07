@@ -2,6 +2,10 @@ name: modular_api_postgres
 description: Official MACSS Postgres integration package for Dart.
 version: 0.4.7
 
+repository: https://github.com/ccisnedev/modular_api/tree/main/code/dart/modular_api_postgres
+homepage: https://github.com/ccisnedev/modular_api
+issue_tracker: https://github.com/ccisnedev/modular_api/issues
+
 environment:
   sdk: ^3.9.0
 
