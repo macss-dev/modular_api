@@ -23,13 +23,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/macss-dev/modular_api.git",
+    "url": "https://github.com/ccisnedev/modular_api.git",
     "directory": "code/ts/modular_api_rest_client"
   },
   "bugs": {
-    "url": "https://github.com/macss-dev/modular_api/issues"
+    "url": "https://github.com/ccisnedev/modular_api/issues"
   },
-  "homepage": "https://github.com/macss-dev/modular_api/tree/main/code/ts/modular_api_rest_client#readme",
+  "homepage": "https://github.com/ccisnedev/modular_api/tree/main/code/ts/modular_api_rest_client#readme",
   "devDependencies": {
     "@types/node": "^22.19.11",
     "typescript": "^5.9.3",

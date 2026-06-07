@@ -27,33 +27,26 @@ Implemented workflows for complementary package publish:
 
 Legend:
 - PASS: validated in this session with command output observed
-- PARTIAL: validation started but needs deterministic rerun in clean shell
-- BLOCKED: deterministic run blocked by shell-session command interleaving
 
 | Package | Validation Target | Status | Evidence |
 |---|---|---|---|
 | dart/modular_api_rest_client | dart pub get + analyze + test | PASS | tests passed (7) and analyze clean |
-| dart/modular_api_graphql_client | dart pub get + analyze + test | PASS | tests passed (7) and analyze clean |
+| dart/modular_api_graphql_client | dart pub get + analyze + test | PASS | tests passed (7) and analyze clean (using local `pubspec_overrides.yaml` for dependency bootstrap) |
 | dart/modular_api_sqlserver | dart pub get + analyze + targeted test | PASS | targeted db_client_test passed |
 | dart/modular_api_postgres | dart pub get + analyze + test | PASS | package tests passed |
-| ts/modular_api_rest_client | npm ci + test + build | PARTIAL | run started in shared shell; needs clean rerun |
+| ts/modular_api_rest_client | npm ci + test + build | PASS | vitest passed (7), build executed |
 | ts/modular_api_graphql_client | npm ci + test + build | PASS | vitest passed (7), build executed |
-| ts/modular_api_sqlserver | npm ci + test + build | PARTIAL | run started in shared shell; needs clean rerun |
+| ts/modular_api_sqlserver | npm ci + test + build | PASS | vitest passed (14), build executed |
 | ts/modular_api_postgres | npm ci + test + build | PASS | vitest passed (14), build executed |
-| py/modular_api_rest_client | pip editable install + pytest | PARTIAL | install observed; pytest invocation needs clean rerun with python -m pytest |
-| py/modular_api_graphql_client | pip editable install + pytest | PARTIAL | install observed; pytest invocation needs clean rerun with python -m pytest |
-| py/modular_api_sqlserver | pip editable install + pytest | PARTIAL | install observed; pytest invocation needs clean rerun with python -m pytest |
-| py/modular_api_postgres | pip editable install + pytest | PARTIAL | install observed; pytest invocation needs clean rerun with python -m pytest |
+| py/modular_api_rest_client | pip editable install + python -m pytest | PASS | 7 passed |
+| py/modular_api_graphql_client | pip editable install + python -m pytest | PASS | 7 passed |
+| py/modular_api_sqlserver | pip editable install + python -m pytest | PASS | 14 passed |
+| py/modular_api_postgres | pip editable install + python -m pytest | PASS | 14 passed |
 
 ## Publish Readiness Observations
 
-- TypeScript publish workflows enforce package publishability (`private` must be false).
-- Current package metadata currently blocks publish for:
-  - code/ts/modular_api_graphql_client/package.json (`private: true`)
-  - code/ts/modular_api_sqlserver/package.json (`private: true`)
-  - code/ts/modular_api_postgres/package.json (`private: true`)
-- Current package metadata currently blocks pub.dev publish for:
-  - code/dart/modular_api_graphql_client/pubspec.yaml (`publish_to: none`)
-  - code/dart/modular_api_postgres/pubspec.yaml (`publish_to: none`)
-
-These are intentional safety checks in workflows; publish will fail until metadata is switched to publishable values.
+- TypeScript complementary packages are now publishable (`private=false`).
+- Dart GraphQL/Postgres packages are now publishable (`publish_to` removed).
+- Python workflows now use `python -m pytest` for deterministic execution in CI.
+- Release order constraint remains:
+  - publish `modular_api_rest_client` before `modular_api_graphql_client` (Dart/TS) so hosted dependency resolution succeeds.

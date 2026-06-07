@@ -13,28 +13,30 @@ Goal: PR readiness for complementary package release train
 ## B. Build/Test Validation
 
 - [x] Dart complementary packages validated in this session
-- [ ] TypeScript complementary packages validated in fully clean deterministic shell (2/4 still marked partial)
-- [ ] Python complementary packages validated with deterministic `python -m pytest` run (4/4 still marked partial)
+- [x] TypeScript complementary packages validated in fully clean deterministic shell
+- [x] Python complementary packages validated with deterministic `python -m pytest` run
 
 Reference report: docs/release_validation_matrix.md
 
 ## C. Publish Preconditions
 
-- [ ] TypeScript package metadata set publishable where required (`private=false`)
-- [ ] Dart package metadata set publishable where required (`publish_to` removed or set for pub.dev)
+- [x] TypeScript package metadata set publishable where required (`private=false`)
+- [x] Dart package metadata set publishable where required (`publish_to` removed or set for pub.dev)
+- [x] Python workflows use `python -m pytest` to avoid PATH-dependent failures
 - [x] Workflow checks intentionally fail fast when metadata is not publishable
+- [ ] Release order executed so dependency-linked packages publish after their prerequisites
 
 ## D. GraphQL Plugin Completion Gate
 
 Current objective answer:
 - Implementation exists across Dart/TypeScript/Python with unit, contract, and integration tests.
-- Not yet accepted as 100% release-complete under strict gate until Section B deterministic matrix is fully green and publish preconditions in Section C are resolved.
+- Development and validation gates for this PR are green. Final 100% release completion depends on successful post-merge publish runs.
 
 ## E. Final Go/No-Go
 
-Current state: NO-GO (pending B and C)
+Current state: GO-FOR-MERGE (release execution pending)
 
-To switch to GO:
-1. Execute clean deterministic rerun for partial matrix entries.
-2. Flip package metadata to publishable values for targeted packages.
-3. Re-run matrix and update docs/release_validation_matrix.md with all PASS.
+Post-merge execution plan:
+1. Publish in dependency-safe order by language (`rest_client` before `graphql_client`).
+2. Verify successful workflow runs and registry versions.
+3. Update this checklist to GO-FOR-RELEASE once publish verification is complete.
