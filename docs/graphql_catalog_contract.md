@@ -4,8 +4,8 @@
 **Date:** 2026-06-02
 **Applies to:** GraphQL ecosystem for `modular_api`
 **Supersedes the "open syntax" items in:**
-[graphql_ecosystem_spec.md](graphql_ecosystem_spec.md),
-[graphql_catalog_proposal.md](graphql_catalog_proposal.md)
+[archive/graphql_ecosystem_spec.md](archive/graphql_ecosystem_spec.md),
+[archive/graphql_catalog_proposal.md](archive/graphql_catalog_proposal.md)
 
 This document formalizes three things validated against industry practice
 (pg_graphql, PostGraphile, Hasura, Microsoft Data API builder):

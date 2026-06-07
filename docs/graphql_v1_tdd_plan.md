@@ -29,7 +29,7 @@ contract documents:
 - fail-fast startup and shared health reporting
 
 Post-v1 external database-driver isolation is tracked separately in
-[graphql_dependency_boundary_tdd_plan.md](graphql_dependency_boundary_tdd_plan.md).
+[archive/graphql_dependency_boundary_tdd_plan.md](archive/graphql_dependency_boundary_tdd_plan.md).
 
 ---
 
