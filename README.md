@@ -170,6 +170,8 @@ See `code/dart/modular_api/example/`, `code/ts/modular_api/example/`, and `code/
 - [docs/architecture.md](docs/architecture.md) - canonical architecture specification
 - [docs/plugin_guide.md](docs/plugin_guide.md) - definition of the reference plugin deliverable and acceptance criteria
 - [docs/plugin_host_guide.md](docs/plugin_host_guide.md) - current public plugin-host and authoring guide
+- [docs/release_validation_matrix.md](docs/release_validation_matrix.md) - validation matrix for complementary package release readiness
+- [docs/release_exit_checklist.md](docs/release_exit_checklist.md) - go/no-go checklist for release closure
 - [docs/roadmap.md](docs/roadmap.md) - product roadmap focused on the API and plugin milestones
 
 Historical and development/planning docs are kept in [docs/archive/](docs/archive/) to keep the root docs set focused on operational references.

@@ -1,0 +1,64 @@
+name: Publish TypeScript REST Client
+
+on:
+  push:
+    tags:
+      - 'ts-modular_api_rest_client-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-ts-rest-client-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish @macss/modular-api-rest-client
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: code/ts/modular_api_rest_client
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: code/ts/modular_api_rest_client/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ensure tag matches package version
+        if: github.event_name == 'push'
+        run: |
+          version=$(node -p "require('./package.json').version")
+          expected_tag="ts-modular_api_rest_client-v$version"
+          if [ "$GITHUB_REF_NAME" != "$expected_tag" ]; then
+            echo "Expected tag $expected_tag but got $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build package
+        run: npm run build
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "Missing NPM_TOKEN secret. Configure it in Actions secrets or enable npm trusted publishing for this repository." >&2
+            exit 1
+          fi
+          npm publish --access public --provenance
