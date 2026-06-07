@@ -1,0 +1,524 @@
+import 'package:modular_api_sqlserver/modular_api_sqlserver.dart';
+import 'package:test/test.dart';
+
+void main() {
+  group('DbConnectionSettings', () {
+    test('normalizes environment defaults and redacts secrets', () {
+      final settings = DbConnectionSettings.fromEnvironment(
+        environment: const {
+          'MODULAR_API_SQLSERVER_HOST': 'db.local',
+          'MODULAR_API_SQLSERVER_PASSWORD': 'super-secret',
+        },
+      );
+
+      expect(settings.engineId, 'sqlserver');
+      expect(settings.host, 'db.local');
+      expect(settings.port, 14333);
+      expect(settings.database, 'modular_api_graphql_v1');
+      expect(settings.username, 'sa');
+      expect(settings.password, 'super-secret');
+      expect(settings.redactedSummary, contains('db.local:14333'));
+      expect(settings.redactedSummary, contains('sa@'));
+      expect(settings.redactedSummary, isNot(contains('super-secret')));
+    });
+  });
+
+  group('DbResult', () {
+    test('supports map, flatMap, mapFailure and getOrThrow', () {
+      final success = DbResult<int>.success(21);
+      final failure = DbResult<int>.failure(
+        const DbFailure(
+          kind: DbFailureKind.timeout,
+          code: 'timeout',
+          message: 'Timed out',
+          retryable: true,
+          transient: true,
+        ),
+      );
+
+      expect(success.map((value) => value * 2).value, 42);
+      expect(success.flatMap((value) => DbResult.success(value + 1)).value, 22);
+
+      final mappedFailure = failure.mapFailure(
+        (current) => DbFailure(
+          kind: current.kind,
+          code: 'wrapped_timeout',
+          message: current.message,
+          retryable: current.retryable,
+          transient: current.transient,
+        ),
+      );
+
+      expect(mappedFailure.failure.code, 'wrapped_timeout');
+      expect(success.getOrThrow(), 21);
+      expect(() => failure.getOrThrow(), throwsStateError);
+    });
+  });
+
+  group('DbClient', () {
+    test('delegates query calls and releases package-owned leases', () async {
+      final settings = DbConnectionSettings.fromEnvironment();
+      final provider = _FakeSessionProvider(
+        settings: settings,
+        session: 'db-session',
+      );
+      final executor = _FakeCommandExecutor(
+        rowSet: const DbRowSet(
+          rows: [
+            {'id': 1}
+          ],
+          metadata: DbExecutionMetadata(
+            duration: Duration(milliseconds: 3),
+            commandLabel: 'users.list',
+            rowCount: 1,
+          ),
+        ),
+      );
+      final client = DbClient<String>(
+        settings: settings,
+        sessionProvider: provider,
+        commandExecutor: executor,
+        transactionRunner: _FakeTransactionRunner(),
+      );
+
+      final result = await client.query(
+        const DbCommand(
+          kind: DbCommandKind.query,
+          text: 'select id from users',
+          label: 'users.list',
+        ),
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(result.value.rows, [
+        {'id': 1}
+      ]);
+      expect(result.value.metadata.rowCount, 1);
+      expect(provider.acquireCount, 1);
+      expect(provider.releaseCount, 1);
+      expect(executor.lastSession, 'db-session');
+      expect(executor.lastCommand?.label, 'users.list');
+    });
+
+    test('returns a failure when session acquisition fails', () async {
+      final settings = DbConnectionSettings.fromEnvironment();
+      final provider = _FakeSessionProvider(
+        settings: settings,
+        acquireFailure: const DbFailure(
+          kind: DbFailureKind.connectivity,
+          code: 'connect_failed',
+          message: 'Could not connect',
+          retryable: true,
+          transient: true,
+        ),
+      );
+      final client = DbClient<String>(
+        settings: settings,
+        sessionProvider: provider,
+        commandExecutor: _FakeCommandExecutor(),
+        transactionRunner: _FakeTransactionRunner(),
+      );
+
+      final result = await client.query(
+        const DbCommand(
+          kind: DbCommandKind.query,
+          text: 'select 1',
+        ),
+      );
+
+      expect(result.isFailure, isTrue);
+      expect(result.failure.code, 'connect_failed');
+    });
+
+    test('returns a failure when releasing a package-owned lease fails', () async {
+      final settings = DbConnectionSettings.fromEnvironment();
+      final provider = _FakeSessionProvider(
+        settings: settings,
+        releaseFailure: const DbFailure(
+          kind: DbFailureKind.unknown,
+          code: 'release_failed',
+          message: 'Release failed',
+          retryable: false,
+          transient: false,
+        ),
+      );
+      final client = DbClient<String>(
+        settings: settings,
+        sessionProvider: provider,
+        commandExecutor: _FakeCommandExecutor(),
+        transactionRunner: _FakeTransactionRunner(),
+      );
+
+      final result = await client.query(
+        const DbCommand(
+          kind: DbCommandKind.query,
+          text: 'select 1',
+        ),
+      );
+
+      expect(result.isFailure, isTrue);
+      expect(result.failure.code, 'release_failed');
+    });
+
+    test('does not release application-owned leases', () async {
+      final settings = DbConnectionSettings.fromEnvironment();
+      final provider = _FakeSessionProvider(
+        settings: settings,
+        ownedByPackage: false,
+      );
+      final executor = _FakeCommandExecutor(
+        executionSummary: const DbExecutionSummary(
+          affectedCount: 1,
+          metadata: DbExecutionMetadata(
+            duration: Duration(milliseconds: 2),
+            commandLabel: 'users.touch',
+            affectedCount: 1,
+          ),
+        ),
+      );
+      final client = DbClient<String>(
+        settings: settings,
+        sessionProvider: provider,
+        commandExecutor: executor,
+        transactionRunner: _FakeTransactionRunner(),
+      );
+
+      final result = await client.execute(
+        const DbCommand(
+          kind: DbCommandKind.execute,
+          text: 'update users set touched = 1',
+          label: 'users.touch',
+        ),
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(result.value.affectedCount, 1);
+      expect(provider.releaseCount, 0);
+    });
+
+    test('commits successful transactions and rolls back failed ones', () async {
+      final settings = DbConnectionSettings.fromEnvironment();
+      final provider = _FakeSessionProvider(settings: settings);
+      final executor = _FakeCommandExecutor(scalarValue: 7);
+      final runner = _FakeTransactionRunner();
+      final client = DbClient<String>(
+        settings: settings,
+        sessionProvider: provider,
+        commandExecutor: executor,
+        transactionRunner: runner,
+      );
+
+      final success = await client.transaction<int>((transaction) async {
+        final scalarResult = await transaction.scalar<int>(
+          const DbCommand(
+            kind: DbCommandKind.scalar,
+            text: 'select count(*) from users',
+            label: 'users.count',
+          ),
+        );
+        return scalarResult.map((value) => value.value);
+      });
+
+      final failure = await client.transaction<int>((_) async {
+        return DbResult<int>.failure(
+          const DbFailure(
+            kind: DbFailureKind.conflict,
+            code: 'duplicate_key',
+            message: 'Duplicate key',
+            retryable: false,
+            transient: false,
+          ),
+        );
+      });
+
+      expect(success.isSuccess, isTrue);
+      expect(success.value, 7);
+      expect(failure.isFailure, isTrue);
+      expect(failure.failure.code, 'duplicate_key');
+      expect(runner.commitCount, 1);
+      expect(runner.rollbackCount, 1);
+      expect(provider.releaseCount, 2);
+    });
+
+    test('describes its provider and closes cleanly', () async {
+      final settings = DbConnectionSettings.fromEnvironment();
+      final provider = _FakeSessionProvider(settings: settings);
+      final client = DbClient<String>(
+        settings: settings,
+        sessionProvider: provider,
+        commandExecutor: _FakeCommandExecutor(),
+        transactionRunner: _FakeTransactionRunner(),
+      );
+
+      expect(client.describe().engineId, 'sqlserver');
+      expect(client.describe().database, settings.database);
+
+      final closed = await client.close();
+      expect(closed.isSuccess, isTrue);
+      expect(provider.closeCount, 1);
+    });
+
+    test('propagates provider close failures', () async {
+      final settings = DbConnectionSettings.fromEnvironment();
+      final provider = _FakeSessionProvider(
+        settings: settings,
+        closeFailure: const DbFailure(
+          kind: DbFailureKind.unknown,
+          code: 'close_failed',
+          message: 'Close failed',
+          retryable: false,
+          transient: false,
+        ),
+      );
+      final client = DbClient<String>(
+        settings: settings,
+        sessionProvider: provider,
+        commandExecutor: _FakeCommandExecutor(),
+        transactionRunner: _FakeTransactionRunner(),
+      );
+
+      final closed = await client.close();
+
+      expect(closed.isFailure, isTrue);
+      expect(closed.failure.code, 'close_failed');
+    });
+  });
+
+  group('DbRepository and health', () {
+    test('keeps repository helpers thin over the shared context', () async {
+      final settings = DbConnectionSettings.fromEnvironment();
+      final provider = _FakeSessionProvider(settings: settings);
+      final executor = _FakeCommandExecutor(scalarValue: 9);
+      final context = DbRepositoryContext<String>(
+        settings: settings,
+        sessionProvider: provider,
+        commandExecutor: executor,
+        transactionRunner: _FakeTransactionRunner(),
+      );
+      final repository = _UserStatsRepository(context);
+
+      final result = await repository.totalUsers();
+
+      expect(result.isSuccess, isTrue);
+      expect(result.value, 9);
+      expect(executor.lastCommand?.label, 'users.count');
+    });
+
+    test('probes health and bundles GraphQL support dependencies', () async {
+      final settings = DbConnectionSettings.fromEnvironment();
+      final provider = _FakeSessionProvider(settings: settings);
+      final executor = _FakeCommandExecutor(scalarValue: 1);
+      final client = DbClient<String>(
+        settings: settings,
+        sessionProvider: provider,
+        commandExecutor: executor,
+        transactionRunner: _FakeTransactionRunner(),
+      );
+      final healthContributor = DbHealthContributor<String>(client: client);
+      final support = DbGraphqlSupport<String>(
+        catalogProvider: 'catalog-provider',
+        readExecutor: 'read-executor',
+        healthContributor: healthContributor,
+      );
+
+      final report = await healthContributor.probe();
+
+      expect(report.status, DbHealthStatus.healthy);
+      expect(report.redactedSummary, settings.redactedSummary);
+      expect(report.responseTime, greaterThanOrEqualTo(Duration.zero));
+      expect(support.catalogProvider, 'catalog-provider');
+      expect(support.readExecutor, 'read-executor');
+      expect(support.healthContributor, same(healthContributor));
+    });
+
+    test('reports unhealthy health probes when scalar execution fails', () async {
+      final settings = DbConnectionSettings.fromEnvironment();
+      final provider = _FakeSessionProvider(settings: settings);
+      final executor = _FakeCommandExecutor(
+        failure: const DbFailure(
+          kind: DbFailureKind.timeout,
+          code: 'timeout',
+          message: 'Timed out',
+          retryable: true,
+          transient: true,
+        ),
+      );
+      final client = DbClient<String>(
+        settings: settings,
+        sessionProvider: provider,
+        commandExecutor: executor,
+        transactionRunner: _FakeTransactionRunner(),
+      );
+      final healthContributor = DbHealthContributor<String>(client: client);
+
+      final report = await healthContributor.probe();
+
+      expect(report.status, DbHealthStatus.unhealthy);
+      expect(report.details, 'timeout');
+    });
+  });
+}
+
+final class _FakeSessionProvider implements DbSessionProvider<String> {
+  _FakeSessionProvider({
+    required DbConnectionSettings settings,
+    this.session = 'session-1',
+    this.ownedByPackage = true,
+    this.acquireFailure,
+    this.releaseFailure,
+    this.closeFailure,
+  }) : _description = DbProviderDescription(
+         engineId: settings.engineId,
+         database: settings.database,
+         redactedSummary: settings.redactedSummary,
+         ownsResources: ownedByPackage,
+       );
+
+  final String session;
+  final bool ownedByPackage;
+  final DbFailure? acquireFailure;
+  final DbFailure? releaseFailure;
+  final DbFailure? closeFailure;
+  final DbProviderDescription _description;
+
+  int acquireCount = 0;
+  int releaseCount = 0;
+  int closeCount = 0;
+
+  @override
+  Future<DbResult<DbSessionLease<String>>> acquire() async {
+    acquireCount += 1;
+    if (acquireFailure != null) {
+      return DbResult<DbSessionLease<String>>.failure(acquireFailure!);
+    }
+
+    return DbResult<DbSessionLease<String>>.success(
+      DbSessionLease<String>(
+        session: session,
+        ownedByPackage: ownedByPackage,
+        releaser: () async {
+          releaseCount += 1;
+          if (releaseFailure != null) {
+            return DbResult<void>.failure(releaseFailure!);
+          }
+          return DbResult<void>.success(null);
+        },
+      ),
+    );
+  }
+
+  @override
+  Future<DbResult<void>> close() async {
+    closeCount += 1;
+    if (closeFailure != null) {
+      return DbResult<void>.failure(closeFailure!);
+    }
+    return DbResult<void>.success(null);
+  }
+
+  @override
+  DbProviderDescription describe() {
+    return _description;
+  }
+}
+
+final class _FakeCommandExecutor implements DbCommandExecutor<String> {
+  _FakeCommandExecutor({
+    this.rowSet = const DbRowSet(
+      rows: [],
+      metadata: DbExecutionMetadata(duration: Duration.zero),
+    ),
+    this.executionSummary = const DbExecutionSummary(
+      affectedCount: 0,
+      metadata: DbExecutionMetadata(duration: Duration.zero),
+    ),
+    this.scalarValue,
+    this.failure,
+  });
+
+  final DbRowSet rowSet;
+  final DbExecutionSummary executionSummary;
+  final Object? scalarValue;
+  final DbFailure? failure;
+
+  String? lastSession;
+  DbCommand? lastCommand;
+
+  @override
+  Future<DbResult<DbExecutionSummary>> execute(
+    String session,
+    DbCommand command,
+  ) async {
+    lastSession = session;
+    lastCommand = command;
+    if (failure != null) {
+      return DbResult<DbExecutionSummary>.failure(failure!);
+    }
+    return DbResult<DbExecutionSummary>.success(executionSummary);
+  }
+
+  @override
+  Future<DbResult<DbRowSet>> query(String session, DbCommand command) async {
+    lastSession = session;
+    lastCommand = command;
+    if (failure != null) {
+      return DbResult<DbRowSet>.failure(failure!);
+    }
+    return DbResult<DbRowSet>.success(rowSet);
+  }
+
+  @override
+  Future<DbResult<DbScalar<T>>> scalar<T>(
+    String session,
+    DbCommand command,
+  ) async {
+    lastSession = session;
+    lastCommand = command;
+    if (failure != null) {
+      return DbResult<DbScalar<T>>.failure(failure!);
+    }
+    return DbResult<DbScalar<T>>.success(
+      DbScalar<T>(
+        value: scalarValue as T,
+        metadata: DbExecutionMetadata(
+          duration: Duration.zero,
+          commandLabel: command.label,
+        ),
+      ),
+    );
+  }
+}
+
+final class _FakeTransactionRunner implements DbTransactionRunner<String> {
+  int commitCount = 0;
+  int rollbackCount = 0;
+
+  @override
+  Future<DbResult<T>> run<T>(
+    DbTransactionContext<String> context,
+    Future<DbResult<T>> Function(DbTransactionContext<String> context) body,
+  ) async {
+    final result = await body(context);
+    if (result.isSuccess) {
+      commitCount += 1;
+    } else {
+      rollbackCount += 1;
+    }
+    return result;
+  }
+}
+
+final class _UserStatsRepository extends DbRepository<String> {
+  const _UserStatsRepository(super.context);
+
+  Future<DbResult<int>> totalUsers() async {
+    final result = await scalar<int>(
+      const DbCommand(
+        kind: DbCommandKind.scalar,
+        text: 'select count(*) from users',
+        label: 'users.count',
+      ),
+    );
+    return result.map((value) => value.value);
+  }
+}

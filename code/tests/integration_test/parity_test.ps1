@@ -11,7 +11,7 @@
 # Prerequisites:
 #   - Dart SDK on PATH
 #   - Node.js / npx on PATH
-#   - Python venv at py/.venv with modular_api installed
+#   - Python venv at code/py/modular_api/.venv with modular_api installed
 # =============================================================================
 
 Set-StrictMode -Version Latest
@@ -20,9 +20,9 @@ $ErrorActionPreference = 'Stop'
 # ── Paths & ports ────────────────────────────────────────────────────────────
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
-$dartDir  = Join-Path $repoRoot 'dart'
-$tsDir    = Join-Path $repoRoot 'ts'
-$pyDir    = Join-Path $repoRoot 'py'
+$dartDir  = Join-Path (Join-Path $repoRoot 'dart') 'modular_api'
+$tsDir    = Join-Path (Join-Path $repoRoot 'ts') 'modular_api'
+$pyDir    = Join-Path (Join-Path $repoRoot 'py') 'modular_api'
 
 # Each implementation runs on its own port so all three are alive simultaneously.
 $dartPort = 8081

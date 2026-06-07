@@ -1,0 +1,32 @@
+{
+  "connection": {
+    "environment": {
+      "MODULAR_API_SQLSERVER_HOST": "db.local",
+      "MODULAR_API_SQLSERVER_PASSWORD": "super-secret"
+    },
+    "expected": {
+      "engineId": "sqlserver",
+      "host": "db.local",
+      "port": 14333,
+      "database": "modular_api_graphql_v1",
+      "username": "sa",
+      "password": "super-secret",
+      "driver": "ODBC Driver 17 for SQL Server"
+    },
+    "redactedContains": [
+      "db.local:14333",
+      "sa@",
+      "driver=ODBC Driver 17 for SQL Server"
+    ],
+    "redactedExcludes": [
+      "super-secret"
+    ]
+  },
+  "result": {
+    "successValue": 21,
+    "mappedValue": 42,
+    "flatMappedValue": 22,
+    "timeoutCode": "timeout",
+    "wrappedFailureCode": "wrapped_timeout"
+  }
+}

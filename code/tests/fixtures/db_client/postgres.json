@@ -1,0 +1,32 @@
+{
+  "connection": {
+    "environment": {
+      "MODULAR_API_POSTGRES_HOST": "db.local",
+      "MODULAR_API_POSTGRES_PASSWORD": "super-secret"
+    },
+    "expected": {
+      "engineId": "postgres",
+      "host": "db.local",
+      "port": 5432,
+      "database": "modular_api_graphql_v1",
+      "username": "postgres",
+      "password": "super-secret",
+      "sslMode": "disable"
+    },
+    "redactedContains": [
+      "db.local:5432",
+      "postgres@",
+      "sslmode=disable"
+    ],
+    "redactedExcludes": [
+      "super-secret"
+    ]
+  },
+  "result": {
+    "successValue": 21,
+    "mappedValue": 42,
+    "flatMappedValue": 22,
+    "timeoutCode": "timeout",
+    "wrappedFailureCode": "wrapped_timeout"
+  }
+}

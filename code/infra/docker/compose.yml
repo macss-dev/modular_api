@@ -1,0 +1,23 @@
+services:
+  sqlserver2019:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: modular_api_sqlserver_2019
+    environment:
+      ACCEPT_EULA: Y
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-ModularApi_dev_StrongPass1}
+      MSSQL_COLLATION: ${MSSQL_COLLATION:-SQL_Latin1_General_CP1_CI_AS}
+    ports:
+      - '${MSSQL_HOST_PORT:-14333}:1433'
+    healthcheck:
+      test: ['CMD-SHELL', 'bash /opt/modular_api/healthcheck.sh']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    volumes:
+      - ./sqlserver/healthcheck.sh:/opt/modular_api/healthcheck.sh:ro
+      - sqlserver_data:/var/opt/mssql
+
+volumes:
+  sqlserver_data:

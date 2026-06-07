@@ -1,0 +1,69 @@
+name: Publish Python SQL Server
+
+on:
+  push:
+    tags:
+      - 'py-modular_api_sqlserver-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-py-sqlserver-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish macss-modular-api-sqlserver
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: code/py/modular_api_sqlserver
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Read package version
+        id: pkg
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure tag matches package version
+        if: github.event_name == 'push'
+        run: |
+          expected_tag="py-modular_api_sqlserver-v${{ steps.pkg.outputs.version }}"
+          if [ "$GITHUB_REF_NAME" != "$expected_tag" ]; then
+            echo "Expected tag $expected_tag but got $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade build twine pytest
+
+      - name: Run tests
+        run: python -m pytest
+
+      - name: Build package
+        run: python -m build
+
+      - name: Check distribution
+        run: python -m twine check dist/*
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          if [ -z "$TWINE_PASSWORD" ]; then
+            echo "Missing PYPI_TOKEN secret in repository Actions secrets." >&2
+            exit 1
+          fi
+          python -m twine upload dist/*

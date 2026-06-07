@@ -1,0 +1,67 @@
+name: Publish Dart Postgres
+
+on:
+  push:
+    tags:
+      - 'dart-modular_api_postgres-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-dart-postgres-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish modular_api_postgres
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: code/dart/modular_api_postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Read package version
+        id: pkg
+        run: |
+          version=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure tag matches package version
+        if: github.event_name == 'push'
+        run: |
+          expected_tag="dart-modular_api_postgres-v${{ steps.pkg.outputs.version }}"
+          if [ "$GITHUB_REF_NAME" != "$expected_tag" ]; then
+            echo "Expected tag $expected_tag but got $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+      - name: Dart pub get
+        run: dart pub get
+
+      - name: Run tests
+        run: dart test
+
+      - name: Analyze
+        run: dart analyze
+
+      - name: Configure pub.dev credentials
+        env:
+          PUB_CREDENTIALS_JSON: ${{ secrets.DART_PUB_CREDENTIALS_JSON }}
+        run: |
+          if [ -z "$PUB_CREDENTIALS_JSON" ]; then
+            echo "Missing DART_PUB_CREDENTIALS_JSON secret in repository Actions secrets." >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.config/dart"
+          printf '%s' "$PUB_CREDENTIALS_JSON" > "$HOME/.config/dart/pub-credentials.json"
+
+      - name: Publish to pub.dev
+        run: dart pub publish --force
