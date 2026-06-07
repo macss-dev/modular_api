@@ -168,7 +168,12 @@ See `code/dart/modular_api/example/`, `code/ts/modular_api/example/`, and `code/
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) - canonical architecture specification
+- [docs/application_boundary_architecture_spec.md](docs/application_boundary_architecture_spec.md) - canonical MACSS layer-separation specification around view, controller, service_client, local API, repository, and db_client
+- [docs/plugin_guide.md](docs/plugin_guide.md) - definition of the reference plugin deliverable and acceptance criteria
 - [docs/plugin_host_guide.md](docs/plugin_host_guide.md) - current public plugin-host and authoring guide
+- [docs/service_client_model_spec.md](docs/service_client_model_spec.md) - canonical outbound service-client specification for REST, GraphQL, and future transports
+- [docs/twelve_package_development_spec.md](docs/twelve_package_development_spec.md) - delivery spec for the 12 new extension packages
+- [docs/extension_package_completion_checklist.md](docs/extension_package_completion_checklist.md) - working checklist for package delivery and architectural completion
 - [docs/roadmap.md](docs/roadmap.md) - product roadmap focused on the API and plugin milestones
 
 ---

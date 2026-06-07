@@ -43,6 +43,9 @@ shaping the next layer of the MACSS ecosystem.
 The engine-agnostic contract for those packages is defined separately in
 [db_client_model_spec.md](db_client_model_spec.md).
 
+The full 12-package extension map and delivery order are defined separately in
+[twelve_package_development_spec.md](twelve_package_development_spec.md).
+
 ### 1.1 Terminology
 
 - **External driver:** a third-party database client library that talks to a

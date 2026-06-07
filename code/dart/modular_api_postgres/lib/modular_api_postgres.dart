@@ -1,0 +1,1 @@
+export 'src/modular_api_postgres.dart';

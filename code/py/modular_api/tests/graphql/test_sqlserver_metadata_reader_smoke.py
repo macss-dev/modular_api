@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("pyodbc")
+
 from modular_api.graphql.sqlserver import (
     PhysicalCatalog,
     PhysicalObject,

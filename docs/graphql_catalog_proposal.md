@@ -77,7 +77,7 @@ entities rather than a second handwritten schema. See the prior-art review in
 
 Each published object represents one SQL table or one SQL view in v1, carrying:
 source reference, object kind, read mode, identity, field set, relation set,
-query capabilities, and authorization/governance metadata.
+query capabilities, and governance/surface-shaping metadata.
 
 In v1, the catalog uses a strict allowlist: an object appears only when it is
 published explicitly through sidecar metadata. Absence from the sidecar means
@@ -187,7 +187,9 @@ than being silently clamped.
 The catalog carries object visibility, field visibility, relation visibility,
 and sensitivity metadata. Declarative authorization metadata is out of scope
 for v1. Authorization remains a distinct enforced layer outside the catalog —
-hiding a field is surface shaping, not security.
+hiding a field is surface shaping, not security. The GraphQL runtime must reuse
+the same host authorization context and enforcement hook used by the rest of
+the API.
 
 ---
 

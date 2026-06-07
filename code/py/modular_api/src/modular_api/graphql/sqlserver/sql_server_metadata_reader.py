@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, cast
 
-import pyodbc
+if TYPE_CHECKING:
+    import pyodbc
 
 from modular_api.graphql.sqlserver.physical_model import (
     PhysicalCatalog,
@@ -18,7 +19,7 @@ from modular_api.graphql.sqlserver.sql_server_connection_settings import (
     SqlServerConnectionSettings,
 )
 
-ConnectFn = Callable[..., pyodbc.Connection]
+ConnectFn = Callable[..., Any]
 
 
 class SqlServerMetadataReader:
@@ -28,11 +29,12 @@ class SqlServerMetadataReader:
         connect: ConnectFn | None = None,
     ) -> None:
         self._connection = connection
-        self._connect = connect or pyodbc.connect
+        self._connect = connect
 
     def introspect(self, schema_names: set[str] | tuple[str, ...] | list[str] | None = None) -> PhysicalCatalog:
         normalized_schema_names = tuple(sorted(schema_names or ()))
-        connection = self._connect(self._connection.connection_string(), timeout=5)
+        connect = self._connect or _load_pyodbc_connect()
+        connection = connect(self._connection.connection_string(), timeout=5)
         try:
             cursor = connection.cursor()
             objects_by_id = _load_objects(cursor, normalized_schema_names)
@@ -70,7 +72,7 @@ class _MutableRelation:
 
 
 def _load_objects(
-    cursor: pyodbc.Cursor,
+    cursor: Any,
     schema_names: tuple[str, ...],
 ) -> dict[str, _MutablePhysicalObject]:
     rows = _run_metadata_query(
@@ -108,7 +110,7 @@ ORDER BY s.name, o.name;
 
 
 def _load_fields(
-    cursor: pyodbc.Cursor,
+    cursor: Any,
     schema_names: tuple[str, ...],
     objects_by_id: dict[str, _MutablePhysicalObject],
 ) -> None:
@@ -152,7 +154,7 @@ ORDER BY s.name, o.name, c.column_id;
 
 
 def _load_identity_fields(
-    cursor: pyodbc.Cursor,
+    cursor: Any,
     schema_names: tuple[str, ...],
     objects_by_id: dict[str, _MutablePhysicalObject],
 ) -> None:
@@ -187,7 +189,7 @@ ORDER BY s.name, o.name, ic.key_ordinal;
 
 
 def _load_relations(
-    cursor: pyodbc.Cursor,
+    cursor: Any,
     schema_names: tuple[str, ...],
     objects_by_id: dict[str, _MutablePhysicalObject],
 ) -> None:
@@ -260,15 +262,27 @@ ORDER BY source_schema.name, source_object.name, fk.name, fkc.constraint_column_
         )
 
 
+def _load_pyodbc_connect() -> ConnectFn:
+    try:
+        import pyodbc
+    except ModuleNotFoundError as error:
+        raise RuntimeError(
+            'SqlServerMetadataReader requires the optional "pyodbc" package. '
+            'Install it to use SQL Server introspection.'
+        ) from error
+
+    return cast(ConnectFn, pyodbc.connect)
+
+
 def _run_metadata_query(
-    cursor: pyodbc.Cursor,
+    cursor: Any,
     *,
     label: str,
     query: str,
 ) -> list[Any]:
     try:
         return list(cursor.execute(query).fetchall())
-    except pyodbc.Error as error:
+    except Exception as error:
         raise RuntimeError(f"Failed to load {label}: {error}") from error
 
 

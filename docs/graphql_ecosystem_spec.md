@@ -296,6 +296,9 @@ This preserves the optional CQRS profile already reflected in the roadmap.
 - mounted under the shared `basePath`
 - participates in the same middleware pipeline
 - receives the same request-scoped logging semantics
+- uses the same authorization context and enforcement hook as the rest of the
+  API; the GraphQL plugin must not introduce a second divergent authorization
+  model
 - relies on the same plugin host capability model
 - requires no core-only escape hatches
 - uses a conservative typed filter surface by scalar family rather than a
@@ -324,6 +327,31 @@ This preserves the optional CQRS profile already reflected in the roadmap.
 5. authorization is enforced outside sidecar metadata through API auth,
   database permissions, curated views, and/or executor-scoped filters
 6. **field hiding is surface shaping, not authorization**
+
+### 9.1 Authorization contract for v1
+
+Authorization in GraphQL follows the same host-owned model as REST. The GraphQL
+plugin does not define a second policy language and does not read authorization
+rules from sidecar metadata.
+
+V1 rules:
+
+- authentication and coarse endpoint authorization run in the normal API
+  middleware pipeline before GraphQL execution starts
+- the GraphQL runtime receives a request-scoped authorization context from the
+  host rather than reconstructing auth state from metadata
+- the minimum conceptual authorization context is: authenticated principal,
+  claims or scopes, tenant or partition context when applicable, and request
+  correlation data
+- top-level reads and relation-batch reads must receive that same request-
+  scoped execution context
+- if the request is unauthorized for the endpoint, execution must short-circuit
+  before catalog reads or resolver work begin
+- if result narrowing is needed by tenant, role, or ownership, it happens
+  through curated views, database permissions, and/or executor-scoped filters
+  derived from the host authorization context
+- `hidden`, `sensitive`, and unpublished metadata may shape the public surface,
+  but they must never be treated as the source of authorization truth
 
 Governance metadata must be additive and low-duplication for published objects:
 it augments inference rather than restating the schema.

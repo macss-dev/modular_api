@@ -307,6 +307,8 @@ runtime plugin model.
 - core config defaults to `introspection = false`, `maxDepth = 8`, and
   `maxComplexity = 500`
 - invalid `maxDepth` or `maxComplexity` configuration fails startup validation
+- endpoint authorization failure short-circuits before catalog reads or GraphQL
+  execution begin
 - health reports `disabled` when GraphQL is not configured
 - health reports `ready` when GraphQL is fully initialized
 
@@ -315,6 +317,7 @@ runtime plugin model.
 - plugin wiring and capability registration
 - startup orchestration
 - fail-fast initialization gate
+- host authorization hook integration
 - GraphQL health subsystem exposure
 
 **Exit criteria:**
@@ -341,8 +344,8 @@ runtime plugin model.
 - `page.limit = 0` yields an empty `items` list while still allowing
   `totalCount`
 - `totalCount` is resolved only when selected
-- auth and tenant context reach the executor through request-scoped execution
-  context
+- auth and tenant context reach both top-level and relation-batch executor
+  calls through request-scoped execution context
 - logging or telemetry hooks capture GraphQL lifecycle events
 
 **Production scope:**
@@ -350,7 +353,7 @@ runtime plugin model.
 - batching/grouping layer above the executor
 - limit and complexity enforcement
 - lazy count execution
-- request context propagation and instrumentation
+- request and authorization context propagation and instrumentation
 
 **Exit criteria:**
 

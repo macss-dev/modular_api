@@ -50,7 +50,8 @@ placeholder family name.
 The intended product shape is:
 
 - `modular_api` = core HTTP, use cases, middleware, health base, metrics base,
-  and GraphQL base
+  and GraphQL-base contracts/runtime-neutral seams used by the future optional
+  GraphQL plugin
 - `db_client_sqlserver` = official SQL Server engine integration package
 - `db_client_postgres` = official Postgres engine integration package
 
@@ -168,6 +169,10 @@ and normalized failures.
 ### 7.4 Repository layer
 
 Owns the MACSS repository helpers and the Result-oriented persistence style.
+
+This layer standardizes repository primitives used by applications. Concrete
+repositories still remain application- or domain-specific code outside the
+engine package.
 
 This layer should make the common path ergonomic while still letting advanced
 users drop down to direct command execution when needed.
@@ -297,6 +302,50 @@ Conceptual contract:
 run(body, options?) -> DbResult<T>
 ```
 
+### 8.6.1 Normalized success payloads
+
+The `db_client` family must not return raw driver rows or ad-hoc execution
+summaries as its shared success surface.
+
+Minimum shared success payload contracts:
+
+`DbRowSet`
+
+Required fields:
+
+- `rows`
+- `metadata`
+
+Recommended metadata fields:
+
+- `rowCount`
+- `duration`
+- `commandLabel`
+
+`DbExecutionSummary`
+
+Required fields:
+
+- `affectedCount`
+- `metadata`
+
+Recommended metadata fields:
+
+- `duration`
+- `commandLabel`
+
+`DbScalar`
+
+Required fields:
+
+- `value`
+- `metadata`
+
+Recommended metadata fields:
+
+- `duration`
+- `commandLabel`
+
 ### 8.7 Result model
 
 `DbResult<T>`
@@ -354,7 +403,37 @@ Minimum required kinds:
 - `cancelled`
 - `unknown`
 
-### 8.9 Repository context
+### 8.9 Public facade
+
+`DbClient`
+
+Responsibilities:
+
+- provide one ergonomic root facade for direct engine operations
+- compose session acquisition, command execution, transaction helpers, and
+  repository-context creation
+- keep raw driver types out of the public entry path
+
+Conceptual contract:
+
+```text
+query(command) -> DbResult<DbRowSet>
+execute(command) -> DbResult<DbExecutionSummary>
+scalar(command) -> DbResult<DbScalar>
+transaction(body, options?) -> DbResult<T>
+repositoryContext() -> DbRepositoryContext
+close() -> DbResult<void>
+describe() -> DbProviderDescription
+```
+
+Rules:
+
+- engine package roots SHOULD expose `DbClient` or an equivalent root facade
+- the facade must delegate to `DbSessionProvider`, `DbCommandExecutor`, and
+  `DbTransactionRunner` rather than introducing a second execution model
+- the facade must preserve `DbResult<T>` and `DbFailure` semantics
+
+### 8.10 Repository context
 
 `DbRepositoryContext`
 
@@ -369,7 +448,7 @@ Required members:
 - `commandExecutor`
 - `transactionRunner`
 
-### 8.10 Repository base
+### 8.11 Repository base
 
 `DbRepository`
 
@@ -385,8 +464,10 @@ Repository rules:
 - repositories may execute engine SQL explicitly
 - repositories should return `DbResult<T>` or a domain alias built on it
 - repositories must not depend on concrete driver types
+- the engine package provides repository primitives, not the application's
+  concrete repositories
 
-### 8.11 Health integration
+### 8.12 Health integration
 
 `DbHealthContributor`
 
@@ -402,7 +483,7 @@ Required outputs:
 - response time
 - redacted output summary
 
-### 8.12 GraphQL support bundle
+### 8.13 GraphQL support bundle
 
 `DbGraphqlSupport`
 
@@ -457,6 +538,8 @@ Rules:
 - repository helpers return `DbResult<T>` or an alias preserving the same
   semantics
 - failures are structured through `DbFailure`, not arbitrary driver exceptions
+- success payloads preserve normalized metadata through `DbRowSet`,
+  `DbExecutionSummary`, or `DbScalar`
 - bridge helpers may convert `DbResult<T>` into application exceptions when the
   app chooses that style
 

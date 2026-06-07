@@ -5,8 +5,9 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 
-import pyodbc
 import pytest
+
+pyodbc = pytest.importorskip("pyodbc")
 
 
 def _connection_string() -> str:

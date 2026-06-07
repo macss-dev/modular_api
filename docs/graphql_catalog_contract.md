@@ -422,6 +422,21 @@ V1 also standardizes these companion decisions:
 - published view relations MUST be declared explicitly in metadata
 - pagination mode is `offset` only; `cursor` is out of scope for v1
 - declarative authorization metadata is out of scope for v1
+- authorization enforcement remains outside metadata, but the GraphQL runtime
+  MUST apply the host API authorization context before executing catalog reads
+
+### 2.5.1 Authorization contract for v1
+
+- endpoint authentication and coarse authorization remain host-owned and must
+  run before catalog reads begin
+- request-scoped execution context passed into GraphQL must carry the host
+  authorization context plus tenant or partition information when applicable
+- provider-compiled top-level reads and relation-batch reads must receive that
+  same request-scoped execution context
+- metadata fields such as `hidden` or `sensitive` may shape the public surface,
+  but MUST NOT be treated as authorization policy
+- result narrowing may occur through database permissions, curated views,
+  and/or executor-scoped filters derived from the host authorization context
 
 ### 2.6 Parsing rules
 

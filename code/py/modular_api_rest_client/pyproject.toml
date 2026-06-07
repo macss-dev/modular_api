@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "macss-modular-api-rest-client"
+version = "0.4.7"
+description = "Official MACSS outbound REST client for Python."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "ccisne.dev" }]
+keywords = ["macss", "http", "rest", "client"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/macss-dev/modular_api"
+Repository = "https://github.com/macss-dev/modular_api/tree/main/code/py/modular_api_rest_client"
+Issues = "https://github.com/macss-dev/modular_api/issues"
+Documentation = "https://github.com/macss-dev/modular_api/tree/main/code/py/modular_api_rest_client#readme"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"

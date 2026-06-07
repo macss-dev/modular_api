@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -7,6 +9,17 @@ import {
   type PhysicalCatalog,
   type PhysicalObject,
 } from '../../src';
+
+const require = createRequire(import.meta.url);
+const hasSqlDriver = (() => {
+  try {
+    require.resolve('mssql');
+    return true;
+  } catch {
+    return false;
+  }
+})();
+const itWithDriver = hasSqlDriver ? it : it.skip;
 
 describe('SqlServerMetadataReader smoke', () => {
   it('explains how to enable the optional mssql dependency when the driver is unavailable', async () => {
@@ -28,7 +41,7 @@ describe('SqlServerMetadataReader smoke', () => {
     );
   });
 
-  it(
+  itWithDriver(
     'returns table columns with normalized native types, primary keys, and foreign keys',
     async () => {
       const catalog = await introspectStage1Fixture();
@@ -66,7 +79,7 @@ describe('SqlServerMetadataReader smoke', () => {
     120_000,
   );
 
-  it(
+  itWithDriver(
     'returns view columns with projected native types and nullability from real metadata',
     async () => {
       const catalog = await introspectStage1Fixture();
@@ -88,7 +101,7 @@ describe('SqlServerMetadataReader smoke', () => {
     120_000,
   );
 
-  it(
+  itWithDriver(
     'is stable across repeated introspection of the same prepared database state',
     async () => {
       const first = await introspectStage1Fixture();
@@ -99,7 +112,7 @@ describe('SqlServerMetadataReader smoke', () => {
     120_000,
   );
 
-  it(
+  itWithDriver(
     'keeps logical object identity without requiring file-path provenance',
     async () => {
       const catalog = await introspectStage1Fixture();

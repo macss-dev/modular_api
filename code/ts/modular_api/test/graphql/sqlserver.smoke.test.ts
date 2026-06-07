@@ -1,7 +1,32 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import sql from 'mssql';
+import { createRequire } from 'node:module';
 
-const sqlServerConfig: sql.config = {
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+type SqlRequestLike = {
+  query<Row extends object>(query: string): Promise<{ recordset: Row[] }>;
+};
+
+type SqlConnectionPoolLike = {
+  close(): Promise<void>;
+  request(): SqlRequestLike;
+};
+
+type SqlModuleLike = {
+  connect(config: object): Promise<SqlConnectionPoolLike>;
+};
+
+const require = createRequire(import.meta.url);
+const hasSqlDriver = (() => {
+  try {
+    require.resolve('mssql');
+    return true;
+  } catch {
+    return false;
+  }
+})();
+const describeWithDriver = hasSqlDriver ? describe : describe.skip;
+
+const sqlServerConfig = {
   user: process.env.MODULAR_API_SQLSERVER_USERNAME ?? 'sa',
   password: process.env.MODULAR_API_SQLSERVER_PASSWORD ?? 'ModularApi_dev_StrongPass1',
   server: process.env.MODULAR_API_SQLSERVER_HOST ?? '127.0.0.1',
@@ -13,10 +38,11 @@ const sqlServerConfig: sql.config = {
   },
 };
 
-describe('SQL Server Stage 1 smoke', () => {
-  let pool: sql.ConnectionPool;
+describeWithDriver('SQL Server Stage 1 smoke', () => {
+  let pool: SqlConnectionPoolLike;
 
   beforeAll(async () => {
+    const sql = require('mssql') as SqlModuleLike;
     pool = await sql.connect(sqlServerConfig);
   });
 
