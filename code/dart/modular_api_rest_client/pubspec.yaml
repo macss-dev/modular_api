@@ -1,6 +1,6 @@
 name: modular_api_rest_client
 description: Official MACSS outbound REST client for Dart.
-version: 0.4.7
+version: 0.4.8
 
 repository: https://github.com/ccisnedev/modular_api/tree/main/code/dart/modular_api_rest_client
 homepage: https://github.com/ccisnedev/modular_api
@@ -10,8 +10,7 @@ environment:
   sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
-  # Keep explicit empty map so pubspec schema stays valid.
-  {}
+  http: ">=1.2.0 <2.0.0"
 
 dev_dependencies:
   lints: ^5.0.0
