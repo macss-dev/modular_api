@@ -23,10 +23,10 @@ specification experiment produced three findings with evidence:
 2. **Plugin routes are labeled `route="UNMATCHED"` in `http_requests_total`.** The metrics
    middleware only recognizes paths from the use case registry, so per-endpoint latency and error
    rates are unavailable for plugin routes.
-3. **The default `excludedMetricsRoutes` is stale.** It excludes `/metrics`, `/health`, and `/docs`
-   at the root, but since the official plugins mounted those endpoints under the `basePath`
-   (e.g. `/api/v1/health`), operational traffic is no longer excluded and pollutes the metrics
-   as `UNMATCHED`.
+
+(A third suspected finding — stale root-path defaults in the metrics/logging exclusions — was
+disproven on evidence recount: both the MetricsPlugin and the logging middleware already derive
+their exclusions from `operationalRoutePaths(basePath)`. No change needed there.)
 
 A workaround existed for finding 1 — mutating the spec via the `modular_api.openapi.spec`
 capability — but user plugins run `setup()` before official plugins, so the capability does not
@@ -52,8 +52,6 @@ Plugin routes become first-class citizens of the operational surfaces:
    build afterwards.
 4. **The MetricsPlugin recognizes plugin routes.** Registered plugin route paths join
    `registeredPaths`, so plugin routes receive their real route label instead of `UNMATCHED`.
-5. **The default metrics exclusions follow the basePath.** `excludedMetricsRoutes` defaults derive
-   from `operationalRoutePaths(basePath, ...)` instead of hard-coded root paths.
 
 These changes are part of the 0.5.0 line. TypeScript ships first (validated by the Fotos API as
 the real-world consumer, using a local `file:` dependency during development); Dart and Python
@@ -65,7 +63,6 @@ reach parity within the synchronized 0.5.0 release (per ADR-0002).
   in the same `/docs` and `/openapi.json|yaml`, which is the contract consumers actually face.
 - **Per-endpoint observability covers plugins** — latency/error metrics work for binary endpoints
   without plugin-side workaround metrics.
-- **Cleaner metrics by default** — operational endpoints stop appearing as `UNMATCHED` noise.
 - **The `openapi` field is optional** — existing plugins remain valid; undocumented routes simply
   do not appear in the spec (and can be flagged by a future lint/validation).
 - **Cross-SDK work** — the plugin contract change must be mirrored in Dart and Python for the

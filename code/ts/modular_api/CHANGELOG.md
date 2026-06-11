@@ -5,7 +5,21 @@ All notable changes to this project will be documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-### Documentation
+## [Unreleased]
+
+### Added
+
+- **Plugin OpenAPI contributions (ADR-0003)** — `PluginRoute` gains an optional `openapi` field
+  (standard OpenAPI Operation object); the official OpenApiPlugin merges `custom`/`transport`
+  plugin routes into the generated spec, so plugin-served endpoints (e.g. binaries) appear in
+  `/openapi.json`, `/openapi.yaml`, and `/docs`.
+- **`PluginHost.routes()`** — read view of registered plugin routes (pluginId, method, mounted
+  path, visibility, openapi operation).
+
+### Changed
+
+- **Metrics route labels cover plugin routes** — registered plugin route paths join
+  `registeredPaths`, so plugin routes report their real `route` label instead of `UNMATCHED`.
 
 ## [0.4.8] - 2026-06-06
 

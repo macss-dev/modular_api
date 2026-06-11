@@ -39,6 +39,7 @@ export type {
   PluginRouteVisibility,
   PluginValidationResult,
   RegisteredModuleView,
+  RegisteredPluginRouteView,
   RegisteredUseCaseView,
 } from './core/plugin';
 
