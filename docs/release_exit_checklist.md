@@ -40,3 +40,9 @@ Post-merge execution plan:
 1. Publish in dependency-safe order by language (`rest_client` before `graphql_client`).
 2. Verify successful workflow runs and registry versions.
 3. Update this checklist to GO-FOR-RELEASE once publish verification is complete.
+
+## F. Coordinated Release Mechanism (since 0.5.0)
+
+- The whole ecosystem is released with a SINGLE tag `v<version>` that triggers `.github/workflows/release.yml` (validate -> wave 1 -> wave 2 -> verify, idempotent per package).
+- Do NOT push per-package tags in bulk: GitHub suppresses tag push events when more than 3 tags are pushed at once, so multi-tag pushes silently publish nothing.
+- The per-package `publish-*.yml` workflows are `workflow_dispatch`-only and exist for individual republication.

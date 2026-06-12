@@ -31,3 +31,17 @@ Additionally, the TypeScript `package.json` will include a `prepublishOnly` scri
 - **`prepublishOnly` safeguard** — TypeScript cannot be published without a fresh build. Dart and Python don't need this (pub.dev publishes source; `publish.ps1` already rebuilds).
 - **Minor changelog noise** — parity bumps add entries with no functional content. This is an accepted trade-off for version consistency.
 - **Release process** — all three publishes happen in the same session; no SDK is left behind.
+
+## Current package set (0.5.0)
+
+Synchronized versioning now covers 15 packages (5 per ecosystem):
+
+| Ecosystem | Packages |
+| --- | --- |
+| TypeScript (npm) | `@macss/modular-api`, `@macss/modular-api-rest-client`, `@macss/modular-api-graphql-client`, `@macss/modular-api-sqlserver`, `@macss/modular-api-postgres` |
+| Dart (pub.dev) | `modular_api`, `modular_api_rest_client`, `modular_api_graphql_client`, `modular_api_sqlserver`, `modular_api_postgres` |
+| Python (PyPI) | `macss-modular-api`, `macss-modular-api-rest-client`, `macss-modular-api-graphql-client`, `macss-modular-api-sqlserver`, `macss-modular-api-postgres` |
+
+`docs-ui` is **not** part of the synchronized set; it follows its own independent 0.1.x line.
+
+**Release mechanism:** a single tag `v<version>` triggers `.github/workflows/release.yml`, which validates that all 15 manifests match the tag version and publishes everything in dependency-safe waves. Per-package multi-tag pushes are prohibited: GitHub suppresses push events when more than 3 tags are pushed at once, so they silently publish nothing. The per-package `publish-*.yml` workflows remain `workflow_dispatch`-only for individual republication.
