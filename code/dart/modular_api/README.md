@@ -129,7 +129,7 @@ class HelloPlugin implements Plugin, ValidatingPlugin {
 
 ```yaml
 dependencies:
-  modular_api: ^0.4.7
+  modular_api: ^0.5.0
 ```
 
 ```bash
