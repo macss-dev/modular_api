@@ -101,6 +101,12 @@ class HelloPlugin implements Plugin {
       method: 'GET',
       path: '/hello-plugin',
       visibility: 'custom',
+      // Optional OpenAPI Operation object — when present, the official
+      // OpenApiPlugin merges the route into /openapi.json and /docs (ADR-0003).
+      openapi: {
+        summary: 'Hello from a plugin route',
+        responses: { '200': { description: 'OK' } },
+      },
       handler: () => ({
         status: 200,
         body: { ok: true, basePath: host.metadata().basePath },

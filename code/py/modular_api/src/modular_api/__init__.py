@@ -35,6 +35,7 @@ from modular_api.core.plugin import (
     PluginRoute,
     PluginValidationResult,
     RegisteredModuleView,
+    RegisteredPluginRouteView,
     RegisteredUseCaseView,
     RuntimePluginHost,
 )
@@ -85,6 +86,7 @@ __all__ = [
     "PluginRoute",
     "PluginValidationResult",
     "RegisteredModuleView",
+    "RegisteredPluginRouteView",
     "RegisteredUseCaseView",
     "RequestScopedLogger",
     "RuntimePluginHost",

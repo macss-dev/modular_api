@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+
+import 'package:http/http.dart' as http;
 
 typedef ServiceDecoder<T> = T Function(Object? value);
 typedef ServiceAuthProvider = FutureOr<Map<String, String>> Function(
@@ -203,19 +204,12 @@ abstract class ServiceClient {
 }
 
 class HttpServiceClient implements ServiceClient {
-  HttpServiceClient(this.config, {HttpClient? httpClient})
-    : _httpClient = httpClient ?? HttpClient(),
-      _ownsHttpClient = httpClient == null {
-    if (config.timeout case final timeout?) {
-      _httpClient.connectionTimeout = timeout;
-    }
-    if (config.userAgent case final userAgent?) {
-      _httpClient.userAgent = userAgent;
-    }
-  }
+  HttpServiceClient(this.config, {http.Client? httpClient})
+    : _httpClient = httpClient ?? http.Client(),
+      _ownsHttpClient = httpClient == null;
 
   final ServiceClientConfig config;
-  final HttpClient _httpClient;
+  final http.Client _httpClient;
   final bool _ownsHttpClient;
   bool _closed = false;
 
@@ -266,6 +260,10 @@ class HttpServiceClient implements ServiceClient {
     final uri = _resolveUri(config.baseUrl, path, operation.query);
     final headers = <String, String>{...config.defaultHeaders, ...operation.headers};
 
+    if (config.userAgent case final userAgent?) {
+      headers.putIfAbsent('user-agent', () => userAgent);
+    }
+
     if (config.authProvider case final authProvider?) {
       headers.addAll(await authProvider(operation));
     }
@@ -300,7 +298,7 @@ class HttpServiceClient implements ServiceClient {
 
     _closed = true;
     if (_ownsHttpClient) {
-      _httpClient.close(force: true);
+      _httpClient.close();
     }
 
     return ServiceResult.success(null);
@@ -315,43 +313,41 @@ class HttpServiceClient implements ServiceClient {
     required Stopwatch stopwatch,
   }) async {
     try {
-      final request = await _httpClient.openUrl(method, uri);
-      for (final entry in headers.entries) {
-        request.headers.set(entry.key, entry.value);
-      }
+      final request = http.Request(method, uri);
+      request.headers.addAll(headers);
 
       if (operation.body != null) {
-        request.headers.contentType ??= ContentType.json;
-        request.write(jsonEncode(operation.body));
+        request.headers['content-type'] ??= 'application/json; charset=utf-8';
+        request.body = jsonEncode(operation.body);
       }
 
-      final response = await request.close();
-      final body = await utf8.decoder.bind(response).join();
+      final streamedResponse = await _httpClient.send(request);
+      final response = await http.Response.fromStream(streamedResponse);
       stopwatch.stop();
 
-      final responseHeaders = _flattenHeaders(response.headers);
+      final responseHeaders = Map<String, String>.from(response.headers);
       final requestId = responseHeaders['x-request-id'];
-      if (!_isSuccessStatusCode(response.statusCode)) {
+      final body = response.body;
+      final statusCode = response.statusCode;
+
+      if (!_isSuccessStatusCode(statusCode)) {
         return ServiceResult.failure(
           ServiceFailure(
-            category: _categoryForStatus(response.statusCode),
-            code: _codeForStatus(response.statusCode),
+            category: _categoryForStatus(statusCode),
+            code: _codeForStatus(statusCode),
             message: body.isEmpty
-                ? 'HTTP request failed with status ${response.statusCode}.'
+                ? 'HTTP request failed with status $statusCode.'
                 : body,
-            retryable: _isRetryableStatus(response.statusCode),
-            statusCode: response.statusCode,
+            retryable: _isRetryableStatus(statusCode),
+            statusCode: statusCode,
             transportId: 'http',
             details: body.isEmpty ? null : body,
           ),
         );
       }
 
-      final decoded = _decodeBody<T>(
-        body: body,
-        contentType: response.headers.contentType,
-        decoder: decoder,
-      );
+      final mimeType = _parseMimeType(responseHeaders['content-type']);
+      final decoded = _decodeBody<T>(body: body, mimeType: mimeType, decoder: decoder);
       if (decoded case ServiceFailure failure) {
         return ServiceResult.failure(failure);
       }
@@ -360,7 +356,7 @@ class HttpServiceClient implements ServiceClient {
         ServiceResponse<T>(
           data: decoded as T,
           metadata: ServiceResponseMetadata(
-            statusCode: response.statusCode,
+            statusCode: statusCode,
             headers: responseHeaders,
             transportId: 'http',
             duration: stopwatch.elapsed,
@@ -368,18 +364,7 @@ class HttpServiceClient implements ServiceClient {
           ),
         ),
       );
-    } on TimeoutException catch (error) {
-      return ServiceResult.failure(
-        ServiceFailure(
-          category: ServiceFailureCategory.timeout,
-          code: 'timeout',
-          message: 'The HTTP request timed out.',
-          retryable: true,
-          transportId: 'http',
-          causeSummary: error.message,
-        ),
-      );
-    } on SocketException catch (error) {
+    } on http.ClientException catch (error) {
       return ServiceResult.failure(
         ServiceFailure(
           category: ServiceFailureCategory.transport,
@@ -388,16 +373,6 @@ class HttpServiceClient implements ServiceClient {
           retryable: true,
           transportId: 'http',
           causeSummary: error.message,
-        ),
-      );
-    } on HttpException catch (error) {
-      return ServiceResult.failure(
-        ServiceFailure(
-          category: ServiceFailureCategory.transport,
-          code: 'http_exception',
-          message: error.message,
-          retryable: true,
-          transportId: 'http',
         ),
       );
     } on FormatException catch (error) {
@@ -484,12 +459,9 @@ Uri _resolveUri(
   );
 }
 
-Map<String, String> _flattenHeaders(HttpHeaders headers) {
-  final result = <String, String>{};
-  headers.forEach((name, values) {
-    result[name] = values.join(',');
-  });
-  return result;
+String? _parseMimeType(String? contentType) {
+  if (contentType == null) return null;
+  return contentType.split(';').first.trim().toLowerCase();
 }
 
 bool _isSuccessStatusCode(int statusCode) {
@@ -497,41 +469,34 @@ bool _isSuccessStatusCode(int statusCode) {
 }
 
 bool _isRetryableStatus(int statusCode) {
-  return statusCode == HttpStatus.tooManyRequests || statusCode >= 500;
+  return statusCode == 429 || statusCode >= 500;
 }
 
 ServiceFailureCategory _categoryForStatus(int statusCode) {
-  if (statusCode == HttpStatus.unauthorized ||
-      statusCode == HttpStatus.forbidden) {
+  if (statusCode == 401 || statusCode == 403) {
     return ServiceFailureCategory.auth;
   }
-  if (statusCode == HttpStatus.tooManyRequests) {
+  if (statusCode == 429) {
     return ServiceFailureCategory.rateLimit;
   }
   return ServiceFailureCategory.protocol;
 }
 
 String _codeForStatus(int statusCode) {
-  if (statusCode == HttpStatus.unauthorized) {
-    return 'unauthorized';
-  }
-  if (statusCode == HttpStatus.forbidden) {
-    return 'forbidden';
-  }
-  if (statusCode == HttpStatus.tooManyRequests) {
-    return 'rate_limit';
-  }
+  if (statusCode == 401) return 'unauthorized';
+  if (statusCode == 403) return 'forbidden';
+  if (statusCode == 429) return 'rate_limit';
   return 'http_$statusCode';
 }
 
 Object? _decodeBody<T>({
   required String body,
-  required ContentType? contentType,
+  required String? mimeType,
   required ServiceDecoder<T>? decoder,
 }) {
   final decodedBody = body.isEmpty
       ? null
-      : _looksLikeJson(contentType, body)
+      : _looksLikeJson(mimeType, body)
       ? jsonDecode(body)
       : body;
 
@@ -542,12 +507,11 @@ Object? _decodeBody<T>({
   return decodedBody as T;
 }
 
-bool _looksLikeJson(ContentType? contentType, String body) {
-  final mimeType = contentType?.mimeType.toLowerCase();
-  if (mimeType == 'application/json' || mimeType?.endsWith('+json') == true) {
+bool _looksLikeJson(String? mimeType, String body) {
+  final m = mimeType?.toLowerCase();
+  if (m == 'application/json' || m?.endsWith('+json') == true) {
     return true;
   }
-
   final trimmed = body.trimLeft();
   return trimmed.startsWith('{') || trimmed.startsWith('[');
 }

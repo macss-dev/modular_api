@@ -27,6 +27,7 @@ export 'src/core/plugin.dart'
         PluginRoute,
         PluginValidationResult,
         RegisteredModuleView,
+        RegisteredPluginRouteView,
         RegisteredUseCaseView,
         RuntimePluginHost,
         orderPlugins,

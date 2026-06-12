@@ -53,7 +53,7 @@ See `example/example.py` for the full implementation including Input, Output, Us
 - Constructor-based unit testing with fake dependency injection
 - `cors_middleware` — built-in CORS support
 - All public endpoints resolve under the configured `base_path`.
-- Scalar docs at `/{basePath}/docs` — auto-generated from registered use cases
+- Swagger UI at `/{basePath}/docs` — auto-generated from registered use cases
 - OpenAPI spec at `/{basePath}/openapi.json` and `/{basePath}/openapi.yaml` — raw spec download
 - Health check at `GET /{basePath}/health` — [IETF Health Check Response Format](doc/health_check_guide.md)
 - Prometheus metrics at `GET /{basePath}/metrics` — [Prometheus exposition format](doc/metrics_guide.md)
@@ -97,6 +97,12 @@ class HelloPlugin(Plugin):
                 method="GET",
                 path="/hello-plugin",
                 visibility="custom",
+                # Optional OpenAPI Operation object — when present, the official
+                # OpenApiPlugin merges the route into /openapi.json and /docs (ADR-0003).
+                openapi={
+                    "summary": "Hello from a plugin route",
+                    "responses": {"200": {"description": "OK"}},
+                },
                 handler=lambda _: {
                     "status": 200,
                     "body": {"ok": True, "basePath": host.metadata().base_path},

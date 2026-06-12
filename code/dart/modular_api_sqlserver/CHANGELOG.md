@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- version bump for cross-SDK parity (ADR-0002); no functional changes
+- update `modular_api` dependency to `^0.5.0`
+
 ## 0.4.8
 
 - switch `modular_api` dependency from local path to published `^0.4.8`

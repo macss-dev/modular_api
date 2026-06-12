@@ -44,6 +44,28 @@ OperationalRoutePaths operationalRoutePaths({
   );
 }
 
+/// Merges plugin-contributed routes into the generated OpenAPI spec (ADR-0003).
+/// Only `custom` and `transport` routes that declare an `openapi` operation are
+/// documented; `operational` routes do not belong to the business contract.
+void mergePluginRoutesIntoSpec(
+  Map<String, dynamic> spec,
+  List<RegisteredPluginRouteView> routes,
+) {
+  final paths = (spec['paths'] ?? <String, dynamic>{}) as Map<String, dynamic>;
+  spec['paths'] = paths;
+
+  for (final route in routes) {
+    if (route.visibility == 'operational' || route.openapi == null) {
+      continue;
+    }
+
+    final pathItem =
+        (paths[route.path] ?? <String, dynamic>{}) as Map<String, dynamic>;
+    pathItem[route.method.toLowerCase()] = route.openapi;
+    paths[route.path] = pathItem;
+  }
+}
+
 Future<List<Plugin>> buildRuntimePlugins({
   required String basePath,
   required String title,
@@ -92,18 +114,18 @@ Future<List<Plugin>> buildRuntimePlugins({
     );
   }
 
-  final openApiJson = await OpenApi.jsonStringFromSchema(
-    title: title,
-    port: port,
-    servers: servers,
-  );
-  final openApiYaml = OpenApi.jsonToYaml(jsonDecode(openApiJson));
+  final openApiSpec = jsonDecode(
+    await OpenApi.jsonStringFromSchema(
+      title: title,
+      port: port,
+      servers: servers,
+    ),
+  ) as Map<String, dynamic>;
 
   plugins.add(
     _OpenApiRuntimePlugin(
       basePath: basePath,
-      jsonSpec: openApiJson,
-      yamlSpec: openApiYaml,
+      spec: openApiSpec,
     ),
   );
   plugins.add(const _DocsRuntimePlugin());
@@ -195,7 +217,13 @@ class _MetricsRuntimePlugin implements Plugin {
           requestsInFlight: requestsInFlight,
           requestDuration: requestDuration,
           excludedRoutes: allExcludedRoutes.toList(),
-          registeredPaths: registeredPaths,
+          // Plugin routes also get their real route label instead of
+          // UNMATCHED (ADR-0003). User plugins run setup() before official
+          // plugins, so their routes are visible here.
+          registeredPaths: [
+            ...registeredPaths,
+            ...host.routes().map((route) => route.path),
+          ],
         ),
       ),
     );
@@ -217,13 +245,11 @@ class _MetricsRuntimePlugin implements Plugin {
 
 class _OpenApiRuntimePlugin implements Plugin {
   final String basePath;
-  final String jsonSpec;
-  final String yamlSpec;
+  final Map<String, dynamic> spec;
 
   const _OpenApiRuntimePlugin({
     required this.basePath,
-    required this.jsonSpec,
-    required this.yamlSpec,
+    required this.spec,
   });
 
   @override
@@ -236,6 +262,12 @@ class _OpenApiRuntimePlugin implements Plugin {
 
   @override
   void setup(PluginHost host) {
+    // User plugins register routes during their setup() before official
+    // plugins build, so their contributions are visible here (ADR-0003).
+    mergePluginRoutesIntoSpec(spec, host.routes());
+    final jsonSpec = const JsonEncoder.withIndent('  ').convert(spec);
+    final yamlSpec = OpenApi.jsonToYaml(spec);
+
     final paths = operationalRoutePaths(basePath: basePath);
     host.exposeCapability(
       Capability<_OpenApiCapability>(

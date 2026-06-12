@@ -118,6 +118,24 @@ class PluginRoute:
     path: str
     visibility: str
     handler: Callable[[PluginRequestContext], Any]
+    # Optional standard OpenAPI Operation object (summary, parameters, requestBody,
+    # responses — including binary content types). When present on a `custom` or
+    # `transport` route, the official OpenApiPlugin merges it into the generated
+    # spec so the route appears in /openapi.json and /docs (ADR-0003).
+    openapi: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class RegisteredPluginRouteView:
+    """Read view of a plugin route already registered on the host (ADR-0003)."""
+
+    id: str
+    method: str
+    # Absolute mounted path (base_path already joined).
+    path: str
+    visibility: str
+    plugin_id: str | None = None
+    openapi: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -154,6 +172,10 @@ class PluginHost(ABC):
 
     @abstractmethod
     def usecases(self) -> list[RegisteredUseCaseView]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def routes(self) -> list[RegisteredPluginRouteView]:
         raise NotImplementedError
 
     @abstractmethod
@@ -259,7 +281,7 @@ class RuntimePluginHost(PluginHost):
             version=version,
             host_api_version=HOST_API_VERSION,
         )
-        self._routes: list[tuple[str, PluginRoute]] = []
+        self._routes: list[tuple[str, PluginRoute, str | None]] = []
         self._middlewares: list[tuple[int, PluginMiddleware]] = []
         self._capabilities: dict[str, CapabilityHandle] = {}
         self._extension_points: dict[str, ModuleExtensionPoint] = {}
@@ -297,7 +319,20 @@ class RuntimePluginHost(PluginHost):
             raise PluginHostError("ROUTE_CONFLICT", f"Route conflict for {route_key}", resource_id=route_key)
 
         self._route_keys.add(route_key)
-        self._routes.append((final_path, route))
+        self._routes.append((final_path, route, self._active_plugin_id))
+
+    def routes(self) -> list[RegisteredPluginRouteView]:
+        return [
+            RegisteredPluginRouteView(
+                plugin_id=plugin_id,
+                id=route.id,
+                method=route.method,
+                path=final_path,
+                visibility=route.visibility,
+                openapi=route.openapi,
+            )
+            for final_path, route, plugin_id in self._routes
+        ]
 
     def register_middleware(self, middleware: PluginMiddleware) -> None:
         self._assert_mutable()
@@ -403,7 +438,7 @@ class RuntimePluginHost(PluginHost):
                 )
 
     def build_routes(self) -> list[Route]:
-        return [Route(final_path, endpoint=_build_plugin_route_handler(route, self._capabilities), methods=[route.method.upper()]) for final_path, route in self._routes]
+        return [Route(final_path, endpoint=_build_plugin_route_handler(route, self._capabilities), methods=[route.method.upper()]) for final_path, route, _ in self._routes]
 
     def middlewares_for_slot(self, slot: str) -> list[PluginMiddleware]:
         candidates = [(sequence, middleware) for sequence, middleware in self._middlewares if middleware.slot == slot]
@@ -551,4 +586,5 @@ def _coerce_plugin_route(route: PluginRoute | dict[str, Any]) -> PluginRoute:
         path=str(route["path"]),
         visibility=str(route["visibility"]),
         handler=route["handler"],
+        openapi=route.get("openapi"),
     )

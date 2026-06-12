@@ -1,6 +1,6 @@
 {
   "name": "@macss/modular-api-postgres",
-  "version": "0.4.7",
+  "version": "0.5.0",
   "private": false,
   "description": "Official MACSS Postgres integration package for TypeScript.",
   "main": "dist/index.js",

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0
+
+- version bump for cross-SDK parity (ADR-0002); no functional changes
+
+## 0.4.8
+
+- replace `dart:io` `HttpClient` with `package:http` for full Flutter web (dart2js) compatibility
+- `HttpServiceClient` now works on all Flutter platforms: web, mobile, desktop, and server
+
 ## 0.4.7
 
 - bootstrap `modular_api_rest_client` for Dart

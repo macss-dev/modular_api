@@ -7,7 +7,7 @@ import type { Counter, Gauge, Histogram } from './metrics/metric';
 import { metricsMiddleware } from './metrics/metrics_middleware';
 import type { MetricRegistry } from './metrics/metric_registry';
 import { apiRegistry } from './registry';
-import type { CapabilityHandle, Plugin, PluginHost, PluginManifest } from './plugin';
+import type { CapabilityHandle, Plugin, PluginHost, PluginManifest, RegisteredPluginRouteView } from './plugin';
 
 const OPENAPI_SPEC_CAPABILITY_ID = 'modular_api.openapi.spec';
 const OFFICIAL_PLUGIN_HOST_RANGE = '>=0.1.0 <0.2.0';
@@ -52,6 +52,29 @@ export function operationalRoutePaths(basePath: string, metricsPath?: string): O
     openApiYamlPath: joinPath(basePath, '/openapi.yaml'),
     metricsPath: metricsPath ? joinPath(basePath, metricsPath) : undefined,
   };
+}
+
+/**
+ * Merges plugin-contributed routes into the generated OpenAPI spec (ADR-0003).
+ * Only `custom` and `transport` routes that declare an `openapi` operation are
+ * documented; `operational` routes do not belong to the business contract.
+ */
+export function mergePluginRoutesIntoSpec(
+  spec: Record<string, unknown>,
+  routes: RegisteredPluginRouteView[],
+): void {
+  const paths = (spec.paths ?? {}) as Record<string, Record<string, unknown>>;
+  spec.paths = paths;
+
+  for (const route of routes) {
+    if (route.visibility === 'operational' || !route.openapi) {
+      continue;
+    }
+
+    const pathItem = (paths[route.path] ?? {}) as Record<string, unknown>;
+    pathItem[route.method.toLowerCase()] = route.openapi;
+    paths[route.path] = pathItem;
+  }
 }
 
 export function buildRuntimePlugins(options: BuildRuntimePluginsOptions): Plugin[] {
@@ -144,7 +167,12 @@ class MetricsRuntimePlugin implements Plugin {
         requestsInFlight: this.options.requestsInFlight,
         requestDuration: this.options.requestDuration,
         excludedRoutes,
-        registeredPaths: apiRegistry.routes.map((route) => route.path),
+        // Plugin routes also get their real route label instead of UNMATCHED (ADR-0003).
+        // User plugins run setup() before official plugins, so their routes are visible here.
+        registeredPaths: [
+          ...apiRegistry.routes.map((route) => route.path),
+          ...host.routes().map((route) => route.path),
+        ],
       }),
     });
 
@@ -187,6 +215,7 @@ class OpenApiRuntimePlugin implements Plugin {
       version: this.options.version,
       servers: this.options.servers,
     });
+    mergePluginRoutesIntoSpec(spec, host.routes());
     const yaml = jsonToYaml(spec);
     const specUrl = operationalRoutePaths(this.options.basePath).openApiJsonPath;
 

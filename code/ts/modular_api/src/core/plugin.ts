@@ -92,6 +92,13 @@ export interface PluginRoute {
   method: HttpMethod;
   path: string;
   visibility: PluginRouteVisibility;
+  /**
+   * Optional standard OpenAPI Operation object (summary, parameters, requestBody,
+   * responses — including binary content types). When present on a `custom` or
+   * `transport` route, the official OpenApiPlugin merges it into the generated
+   * spec so the route appears in /openapi.json and /docs (ADR-0003).
+   */
+  openapi?: Record<string, unknown>;
   handler(context: PluginRequestContext): PluginResponse | Promise<PluginResponse>;
 }
 
@@ -113,10 +120,22 @@ export interface RegisteredUseCaseView {
   path: string;
 }
 
+/** Read view of a plugin route already registered on the host (ADR-0003). */
+export interface RegisteredPluginRouteView {
+  pluginId?: string;
+  id: string;
+  method: HttpMethod;
+  /** Absolute mounted path (basePath already joined). */
+  path: string;
+  visibility: PluginRouteVisibility;
+  openapi?: Record<string, unknown>;
+}
+
 export interface PluginHost {
   metadata(): HostMetadata;
   modules(): RegisteredModuleView[];
   useCases(): RegisteredUseCaseView[];
+  routes(): RegisteredPluginRouteView[];
   registerRoute(route: PluginRoute): void;
   registerMiddleware(middleware: PluginMiddleware): void;
   exposeCapability(capability: Capability): void;
@@ -150,6 +169,7 @@ export class PluginHostError extends Error {
 interface RuntimePluginRoute {
   finalPath: string;
   route: PluginRoute;
+  pluginId?: string;
 }
 
 interface RuntimePluginMiddleware {
@@ -165,7 +185,7 @@ interface RuntimePluginHostOptions {
 
 export class RuntimePluginHost implements PluginHost {
   private readonly metadataValue: HostMetadata;
-  private readonly routes: RuntimePluginRoute[] = [];
+  private readonly registeredRoutes: RuntimePluginRoute[] = [];
   private readonly middlewares: RuntimePluginMiddleware[] = [];
   private readonly capabilitiesMap = new Map<string, CapabilityHandle>();
   private readonly extensionPoints = new Map<string, ModuleExtensionPoint>();
@@ -213,7 +233,18 @@ export class RuntimePluginHost implements PluginHost {
     }
 
     this.routeKeys.add(key);
-    this.routes.push({ finalPath, route });
+    this.registeredRoutes.push({ finalPath, route, pluginId: this.activePluginId });
+  }
+
+  routes(): RegisteredPluginRouteView[] {
+    return this.registeredRoutes.map((registration) => ({
+      pluginId: registration.pluginId,
+      id: registration.route.id,
+      method: registration.route.method,
+      path: registration.finalPath,
+      visibility: registration.route.visibility,
+      openapi: registration.route.openapi,
+    }));
   }
 
   registerMiddleware(middleware: PluginMiddleware): void {
@@ -346,7 +377,7 @@ export class RuntimePluginHost implements PluginHost {
   }
 
   applyRoutes(router: Router): void {
-    for (const registration of this.routes) {
+    for (const registration of this.registeredRoutes) {
       const method = registration.route.method.toLowerCase() as Lowercase<HttpMethod>;
       router[method](registration.finalPath, buildPluginRouteHandler(registration.route, this.capabilitiesMap));
     }
