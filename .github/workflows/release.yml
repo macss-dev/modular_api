@@ -27,9 +27,14 @@ on:
         description: 'Version to release (without the leading v), must match all 15 manifests'
         required: true
 
+# id-token: write is granted ONLY to the npm jobs (required by --provenance).
+# It must NOT be available to the Dart jobs: with an OIDC token in scope,
+# dart-lang/setup-dart switches `dart pub publish` to GitHub-OIDC publishing,
+# which pub.dev rejects unless "automated publishing from GitHub" is enabled
+# per package ("publishing from github is not enabled"). The Dart jobs use
+# DART_PUB_CREDENTIALS_JSON instead, like the original publish-dart-*.yml.
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -97,6 +102,9 @@ jobs:
     name: npm @macss/modular-api
     runs-on: ubuntu-latest
     needs: validate
+    permissions:
+      contents: read
+      id-token: write
     defaults:
       run:
         working-directory: code/ts/modular_api
@@ -153,6 +161,9 @@ jobs:
     name: npm @macss/modular-api-rest-client
     runs-on: ubuntu-latest
     needs: validate
+    permissions:
+      contents: read
+      id-token: write
     defaults:
       run:
         working-directory: code/ts/modular_api_rest_client
@@ -208,6 +219,9 @@ jobs:
     name: npm @macss/modular-api-sqlserver
     runs-on: ubuntu-latest
     needs: validate
+    permissions:
+      contents: read
+      id-token: write
     defaults:
       run:
         working-directory: code/ts/modular_api_sqlserver
@@ -272,6 +286,9 @@ jobs:
     name: npm @macss/modular-api-postgres
     runs-on: ubuntu-latest
     needs: validate
+    permissions:
+      contents: read
+      id-token: write
     defaults:
       run:
         working-directory: code/ts/modular_api_postgres
@@ -785,6 +802,9 @@ jobs:
     name: npm @macss/modular-api-graphql-client
     runs-on: ubuntu-latest
     needs: [validate, ts-rest-client]
+    permissions:
+      contents: read
+      id-token: write
     defaults:
       run:
         working-directory: code/ts/modular_api_graphql_client
