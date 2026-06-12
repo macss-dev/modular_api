@@ -102,6 +102,14 @@ class HelloPlugin implements Plugin, ValidatingPlugin {
         method: 'GET',
         path: '/hello-plugin',
         visibility: 'custom',
+        // Optional OpenAPI Operation object — when present, the official
+        // OpenApiPlugin merges the route into /openapi.json and /docs (ADR-0003).
+        openapi: {
+          'summary': 'Hello from a plugin route',
+          'responses': {
+            '200': {'description': 'OK'},
+          },
+        },
         handler: (_) => Response.ok(
           jsonEncode({'ok': true, 'basePath': host.metadata().basePath}),
           headers: {'content-type': 'application/json'},
