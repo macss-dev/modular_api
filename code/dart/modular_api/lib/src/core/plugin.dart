@@ -164,6 +164,13 @@ class PluginRoute {
   final String method;
   final String path;
   final String visibility;
+
+  /// Optional standard OpenAPI Operation object (summary, parameters,
+  /// requestBody, responses — including binary content types). When present
+  /// on a `custom` or `transport` route, the official OpenApiPlugin merges
+  /// it into the generated spec so the route appears in /openapi.json and
+  /// /docs (ADR-0003).
+  final Map<String, dynamic>? openapi;
   final PluginRouteHandler handler;
 
   const PluginRoute({
@@ -171,7 +178,29 @@ class PluginRoute {
     required this.method,
     required this.path,
     required this.visibility,
+    this.openapi,
     required this.handler,
+  });
+}
+
+/// Read view of a plugin route already registered on the host (ADR-0003).
+class RegisteredPluginRouteView {
+  final String? pluginId;
+  final String id;
+  final String method;
+
+  /// Absolute mounted path (basePath already joined).
+  final String path;
+  final String visibility;
+  final Map<String, dynamic>? openapi;
+
+  const RegisteredPluginRouteView({
+    this.pluginId,
+    required this.id,
+    required this.method,
+    required this.path,
+    required this.visibility,
+    this.openapi,
   });
 }
 
@@ -195,6 +224,7 @@ abstract class PluginHost {
   HostMetadata metadata();
   List<RegisteredModuleView> modules();
   List<RegisteredUseCaseView> useCases();
+  List<RegisteredPluginRouteView> routes();
   void registerRoute(PluginRoute route);
   void registerMiddleware(PluginMiddleware middleware);
   void exposeCapability(Capability capability);
@@ -298,7 +328,29 @@ class RuntimePluginHost implements PluginHost {
     }
 
     _routeKeys.add(routeKey);
-    _routes.add(_RuntimePluginRoute(finalPath: finalPath, route: route));
+    _routes.add(
+      _RuntimePluginRoute(
+        finalPath: finalPath,
+        route: route,
+        pluginId: _activePluginId,
+      ),
+    );
+  }
+
+  @override
+  List<RegisteredPluginRouteView> routes() {
+    return _routes
+        .map(
+          (registration) => RegisteredPluginRouteView(
+            pluginId: registration.pluginId,
+            id: registration.route.id,
+            method: registration.route.method,
+            path: registration.finalPath,
+            visibility: registration.route.visibility,
+            openapi: registration.route.openapi,
+          ),
+        )
+        .toList();
   }
 
   @override
@@ -619,10 +671,12 @@ enum _PluginVisitState { visiting, visited }
 class _RuntimePluginRoute {
   final String finalPath;
   final PluginRoute route;
+  final String? pluginId;
 
   const _RuntimePluginRoute({
     required this.finalPath,
     required this.route,
+    this.pluginId,
   });
 }
 

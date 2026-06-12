@@ -10,7 +10,15 @@ from modular_api.core.health.health_service import HealthService
 from modular_api.core.metrics.metric import Counter, Gauge, Histogram
 from modular_api.core.metrics.metric_registry import MetricRegistry
 from modular_api.core.metrics.metrics_middleware import metrics_middleware
-from modular_api.core.plugin import Capability, Plugin, PluginHost, PluginManifest, PluginMiddleware, PluginRoute
+from modular_api.core.plugin import (
+    Capability,
+    Plugin,
+    PluginHost,
+    PluginManifest,
+    PluginMiddleware,
+    PluginRoute,
+    RegisteredPluginRouteView,
+)
 from modular_api.graphql.runtime import GraphqlOptions, GraphqlRuntimePlugin
 from modular_api.openapi.openapi import build_openapi_spec, json_to_yaml
 from modular_api.openapi.swagger_docs import build_swagger_docs_html
@@ -43,6 +51,24 @@ def operational_route_paths(base_path: str, metrics_path: str | None = None) -> 
         openapi_yaml_path=_join_path(base_path, "/openapi.yaml"),
         metrics_path=None if metrics_path is None else _join_path(base_path, metrics_path),
     )
+
+
+def merge_plugin_routes_into_spec(
+    spec: dict[str, Any],
+    routes: list[RegisteredPluginRouteView],
+) -> None:
+    """Merge plugin-contributed routes into the generated OpenAPI spec (ADR-0003).
+
+    Only ``custom`` and ``transport`` routes that declare an ``openapi`` operation
+    are documented; ``operational`` routes do not belong to the business contract.
+    """
+    paths = spec.setdefault("paths", {})
+    for route in routes:
+        if route.visibility == "operational" or route.openapi is None:
+            continue
+
+        path_item = paths.setdefault(route.path, {})
+        path_item[route.method.lower()] = route.openapi
 
 
 def build_runtime_plugins(
@@ -174,7 +200,13 @@ class _MetricsRuntimePlugin(Plugin):
                     requests_in_flight=self._requests_in_flight,
                     request_duration=self._request_duration,
                     excluded_routes=excluded_routes,
-                    registered_paths=self._registered_paths,
+                    # Plugin routes also get their real route label instead of UNMATCHED
+                    # (ADR-0003). User plugins run setup() before official plugins, so
+                    # their routes are visible here.
+                    registered_paths=[
+                        *self._registered_paths,
+                        *(route.path for route in host.routes()),
+                    ],
                 ),
             )
         )
@@ -210,6 +242,11 @@ class _OpenApiRuntimePlugin(Plugin):
         self._spec_yaml = spec_yaml
 
     def setup(self, host: PluginHost) -> None:
+        # User plugins run setup() before official plugins, so their routes are
+        # already registered on the host and can be merged into the spec (ADR-0003).
+        merge_plugin_routes_into_spec(self._spec, host.routes())
+        self._spec_yaml = json_to_yaml(self._spec)
+
         paths = operational_route_paths(self._base_path)
         host.expose_capability(
             Capability(
