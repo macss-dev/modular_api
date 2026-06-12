@@ -1,0 +1,1068 @@
+# Coordinated release of the whole modular_api ecosystem (ADR-0002: synchronized versioning).
+#
+# A single tag `v<version>` (e.g. v0.5.0) publishes all 15 packages:
+#   - 5 TypeScript packages to npm (code/ts/*)
+#   - 5 Dart packages to pub.dev (code/dart/*)
+#   - 5 Python packages to PyPI (code/py/*)
+# docs-ui is NOT part of the synchronized set (independent 0.1.x line).
+#
+# Do NOT push per-package tags (<eco>-<package>-v*): GitHub suppresses tag push
+# events when more than 3 tags are pushed at once, so multi-tag pushes silently
+# publish nothing. The per-package publish-*.yml workflows remain available via
+# workflow_dispatch for individual republication only.
+#
+# Publication is idempotent: if a package already exists at the target version
+# in its registry, its job skips the publish with a notice, so the workflow can
+# be re-run safely after partial failures.
+
+name: Release (all packages)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (without the leading v), must match all 15 manifests'
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Gate: the version derived from the tag must match all 15 package manifests.
+  # ---------------------------------------------------------------------------
+  validate:
+    name: Validate version across 15 manifests
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine release version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="${{ github.event.inputs.version }}"
+          fi
+          if [ -z "$version" ]; then
+            echo "Could not determine release version." >&2
+            exit 1
+          fi
+          echo "Release version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure all 15 manifests match the release version
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          fail=0
+          for d in modular_api modular_api_rest_client modular_api_graphql_client modular_api_sqlserver modular_api_postgres; do
+            v=$(node -p "require('./code/ts/$d/package.json').version")
+            if [ "$v" != "$version" ]; then
+              echo "MISMATCH code/ts/$d/package.json: $v != $version" >&2
+              fail=1
+            fi
+            v=$(grep '^version:' "code/dart/$d/pubspec.yaml" | awk '{print $2}')
+            if [ "$v" != "$version" ]; then
+              echo "MISMATCH code/dart/$d/pubspec.yaml: $v != $version" >&2
+              fail=1
+            fi
+            v=$(python3 -c "import tomllib; print(tomllib.load(open('code/py/$d/pyproject.toml','rb'))['project']['version'])")
+            if [ "$v" != "$version" ]; then
+              echo "MISMATCH code/py/$d/pyproject.toml: $v != $version" >&2
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "One or more manifests do not match $version. Aborting release." >&2
+            exit 1
+          fi
+          echo "All 15 manifests are at $version."
+
+  # ---------------------------------------------------------------------------
+  # WAVE 1: packages with no intra-ecosystem registry dependencies (12 jobs).
+  # ---------------------------------------------------------------------------
+  ts-core:
+    name: npm @macss/modular-api
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: code/ts/modular_api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@macss%2Fmodular-api/$version")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: @macss/modular-api@$version is already on npm. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: code/ts/modular_api/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check.outputs.skip != 'true'
+        run: npm ci
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: npm test -- --exclude "**/sqlserver*.smoke.test.ts"
+
+      - name: Build package
+        if: steps.check.outputs.skip != 'true'
+        run: npm run build
+
+      - name: Publish to npm
+        if: steps.check.outputs.skip != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "Missing NPM_TOKEN secret. Configure it in Actions secrets or enable npm trusted publishing for this repository." >&2
+            exit 1
+          fi
+
+          npm publish --access public --provenance
+
+  ts-rest-client:
+    name: npm @macss/modular-api-rest-client
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: code/ts/modular_api_rest_client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@macss%2Fmodular-api-rest-client/$version")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: @macss/modular-api-rest-client@$version is already on npm. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: code/ts/modular_api_rest_client/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check.outputs.skip != 'true'
+        run: npm ci
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: npm test
+
+      - name: Build package
+        if: steps.check.outputs.skip != 'true'
+        run: npm run build
+
+      - name: Publish to npm
+        if: steps.check.outputs.skip != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "Missing NPM_TOKEN secret. Configure it in Actions secrets or enable npm trusted publishing for this repository." >&2
+            exit 1
+          fi
+          npm publish --access public --provenance
+
+  ts-sqlserver:
+    name: npm @macss/modular-api-sqlserver
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: code/ts/modular_api_sqlserver
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@macss%2Fmodular-api-sqlserver/$version")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: @macss/modular-api-sqlserver@$version is already on npm. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: code/ts/modular_api_sqlserver/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check.outputs.skip != 'true'
+        run: npm ci
+
+      - name: Ensure package is publishable
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          is_private=$(node -p "require('./package.json').private === true ? 'true' : 'false'")
+          if [ "$is_private" = "true" ]; then
+            echo "package.json has private=true. Set private=false before publishing." >&2
+            exit 1
+          fi
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: npm test
+
+      - name: Build package
+        if: steps.check.outputs.skip != 'true'
+        run: npm run build
+
+      - name: Publish to npm
+        if: steps.check.outputs.skip != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "Missing NPM_TOKEN secret. Configure it in Actions secrets or enable npm trusted publishing for this repository." >&2
+            exit 1
+          fi
+          npm publish --access public --provenance
+
+  ts-postgres:
+    name: npm @macss/modular-api-postgres
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: code/ts/modular_api_postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@macss%2Fmodular-api-postgres/$version")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: @macss/modular-api-postgres@$version is already on npm. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: code/ts/modular_api_postgres/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check.outputs.skip != 'true'
+        run: npm ci
+
+      - name: Ensure package is publishable
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          is_private=$(node -p "require('./package.json').private === true ? 'true' : 'false'")
+          if [ "$is_private" = "true" ]; then
+            echo "package.json has private=true. Set private=false before publishing." >&2
+            exit 1
+          fi
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: npm test
+
+      - name: Build package
+        if: steps.check.outputs.skip != 'true'
+        run: npm run build
+
+      - name: Publish to npm
+        if: steps.check.outputs.skip != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "Missing NPM_TOKEN secret. Configure it in Actions secrets or enable npm trusted publishing for this repository." >&2
+            exit 1
+          fi
+          npm publish --access public --provenance
+
+  dart-core:
+    name: pub.dev modular_api
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: code/dart/modular_api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://pub.dev/api/packages/modular_api/versions/$version")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: modular_api $version is already on pub.dev. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Dart
+        if: steps.check.outputs.skip != 'true'
+        uses: dart-lang/setup-dart@v1
+
+      - name: Dart pub get
+        if: steps.check.outputs.skip != 'true'
+        run: dart pub get
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: dart test
+
+      - name: Analyze
+        if: steps.check.outputs.skip != 'true'
+        run: dart analyze
+
+      - name: Configure pub.dev credentials
+        if: steps.check.outputs.skip != 'true'
+        env:
+          PUB_CREDENTIALS_JSON: ${{ secrets.DART_PUB_CREDENTIALS_JSON }}
+        run: |
+          if [ -z "$PUB_CREDENTIALS_JSON" ]; then
+            echo "Missing DART_PUB_CREDENTIALS_JSON secret in repository Actions secrets." >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.config/dart"
+          printf '%s' "$PUB_CREDENTIALS_JSON" > "$HOME/.config/dart/pub-credentials.json"
+
+      - name: Publish to pub.dev
+        if: steps.check.outputs.skip != 'true'
+        run: dart pub publish --force
+
+  dart-rest-client:
+    name: pub.dev modular_api_rest_client
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: code/dart/modular_api_rest_client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://pub.dev/api/packages/modular_api_rest_client/versions/$version")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: modular_api_rest_client $version is already on pub.dev. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Dart
+        if: steps.check.outputs.skip != 'true'
+        uses: dart-lang/setup-dart@v1
+
+      - name: Dart pub get
+        if: steps.check.outputs.skip != 'true'
+        run: dart pub get
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: dart test
+
+      - name: Analyze
+        if: steps.check.outputs.skip != 'true'
+        run: dart analyze
+
+      - name: Configure pub.dev credentials
+        if: steps.check.outputs.skip != 'true'
+        env:
+          PUB_CREDENTIALS_JSON: ${{ secrets.DART_PUB_CREDENTIALS_JSON }}
+        run: |
+          if [ -z "$PUB_CREDENTIALS_JSON" ]; then
+            echo "Missing DART_PUB_CREDENTIALS_JSON secret in repository Actions secrets." >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.config/dart"
+          printf '%s' "$PUB_CREDENTIALS_JSON" > "$HOME/.config/dart/pub-credentials.json"
+
+      - name: Publish to pub.dev
+        if: steps.check.outputs.skip != 'true'
+        run: dart pub publish --force
+
+  dart-postgres:
+    name: pub.dev modular_api_postgres
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: code/dart/modular_api_postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://pub.dev/api/packages/modular_api_postgres/versions/$version")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: modular_api_postgres $version is already on pub.dev. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Dart
+        if: steps.check.outputs.skip != 'true'
+        uses: dart-lang/setup-dart@v1
+
+      - name: Dart pub get
+        if: steps.check.outputs.skip != 'true'
+        run: dart pub get
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: dart test
+
+      - name: Analyze
+        if: steps.check.outputs.skip != 'true'
+        run: dart analyze
+
+      - name: Configure pub.dev credentials
+        if: steps.check.outputs.skip != 'true'
+        env:
+          PUB_CREDENTIALS_JSON: ${{ secrets.DART_PUB_CREDENTIALS_JSON }}
+        run: |
+          if [ -z "$PUB_CREDENTIALS_JSON" ]; then
+            echo "Missing DART_PUB_CREDENTIALS_JSON secret in repository Actions secrets." >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.config/dart"
+          printf '%s' "$PUB_CREDENTIALS_JSON" > "$HOME/.config/dart/pub-credentials.json"
+
+      - name: Publish to pub.dev
+        if: steps.check.outputs.skip != 'true'
+        run: dart pub publish --force
+
+  py-core:
+    name: PyPI macss-modular-api
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: code/py/modular_api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/macss-modular-api/$version/json")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: macss-modular-api $version is already on PyPI. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Python
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tooling
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pip install --upgrade build twine
+
+      - name: Build package
+        if: steps.check.outputs.skip != 'true'
+        run: python -m build
+
+      - name: Check distribution
+        if: steps.check.outputs.skip != 'true'
+        run: python -m twine check dist/*
+
+      - name: Publish to PyPI
+        if: steps.check.outputs.skip != 'true'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          if [ -z "$TWINE_PASSWORD" ]; then
+            echo "Missing PYPI_TOKEN secret in repository Actions secrets." >&2
+            exit 1
+          fi
+          python -m twine upload dist/*
+
+  py-rest-client:
+    name: PyPI macss-modular-api-rest-client
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: code/py/modular_api_rest_client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/macss-modular-api-rest-client/$version/json")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: macss-modular-api-rest-client $version is already on PyPI. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Python
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tooling
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pip install --upgrade build twine pytest
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pytest
+
+      - name: Build package
+        if: steps.check.outputs.skip != 'true'
+        run: python -m build
+
+      - name: Check distribution
+        if: steps.check.outputs.skip != 'true'
+        run: python -m twine check dist/*
+
+      - name: Publish to PyPI
+        if: steps.check.outputs.skip != 'true'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          if [ -z "$TWINE_PASSWORD" ]; then
+            echo "Missing PYPI_TOKEN secret in repository Actions secrets." >&2
+            exit 1
+          fi
+          python -m twine upload dist/*
+
+  py-graphql-client:
+    name: PyPI macss-modular-api-graphql-client
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: code/py/modular_api_graphql_client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/macss-modular-api-graphql-client/$version/json")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: macss-modular-api-graphql-client $version is already on PyPI. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Python
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tooling
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pip install --upgrade build twine pytest
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pytest
+
+      - name: Build package
+        if: steps.check.outputs.skip != 'true'
+        run: python -m build
+
+      - name: Check distribution
+        if: steps.check.outputs.skip != 'true'
+        run: python -m twine check dist/*
+
+      - name: Publish to PyPI
+        if: steps.check.outputs.skip != 'true'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          if [ -z "$TWINE_PASSWORD" ]; then
+            echo "Missing PYPI_TOKEN secret in repository Actions secrets." >&2
+            exit 1
+          fi
+          python -m twine upload dist/*
+
+  py-sqlserver:
+    name: PyPI macss-modular-api-sqlserver
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: code/py/modular_api_sqlserver
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/macss-modular-api-sqlserver/$version/json")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: macss-modular-api-sqlserver $version is already on PyPI. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Python
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tooling
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pip install --upgrade build twine pytest
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pytest
+
+      - name: Build package
+        if: steps.check.outputs.skip != 'true'
+        run: python -m build
+
+      - name: Check distribution
+        if: steps.check.outputs.skip != 'true'
+        run: python -m twine check dist/*
+
+      - name: Publish to PyPI
+        if: steps.check.outputs.skip != 'true'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          if [ -z "$TWINE_PASSWORD" ]; then
+            echo "Missing PYPI_TOKEN secret in repository Actions secrets." >&2
+            exit 1
+          fi
+          python -m twine upload dist/*
+
+  py-postgres:
+    name: PyPI macss-modular-api-postgres
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: code/py/modular_api_postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/macss-modular-api-postgres/$version/json")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: macss-modular-api-postgres $version is already on PyPI. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Python
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tooling
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pip install --upgrade build twine pytest
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pytest
+
+      - name: Build package
+        if: steps.check.outputs.skip != 'true'
+        run: python -m build
+
+      - name: Check distribution
+        if: steps.check.outputs.skip != 'true'
+        run: python -m twine check dist/*
+
+      - name: Publish to PyPI
+        if: steps.check.outputs.skip != 'true'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          if [ -z "$TWINE_PASSWORD" ]; then
+            echo "Missing PYPI_TOKEN secret in repository Actions secrets." >&2
+            exit 1
+          fi
+          python -m twine upload dist/*
+
+  # ---------------------------------------------------------------------------
+  # WAVE 2: packages whose builds resolve wave-1 packages from the registries.
+  # ---------------------------------------------------------------------------
+  ts-graphql-client:
+    name: npm @macss/modular-api-graphql-client
+    runs-on: ubuntu-latest
+    needs: [validate, ts-rest-client]
+    defaults:
+      run:
+        working-directory: code/ts/modular_api_graphql_client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@macss%2Fmodular-api-graphql-client/$version")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: @macss/modular-api-graphql-client@$version is already on npm. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for @macss/modular-api-rest-client on npm
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          for i in $(seq 1 18); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@macss%2Fmodular-api-rest-client/$version")
+            if [ "$status" = "200" ]; then
+              echo "Dependency @macss/modular-api-rest-client@$version is available on npm."
+              exit 0
+            fi
+            echo "Attempt $i/18: dependency not yet visible (HTTP $status). Retrying in 10s..."
+            sleep 10
+          done
+          echo "Dependency @macss/modular-api-rest-client@$version not visible on npm after ~3 minutes." >&2
+          exit 1
+
+      - name: Setup Node.js
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: code/ts/modular_api_graphql_client/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --include=optional
+
+      - name: Ensure package is publishable
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          is_private=$(node -p "require('./package.json').private === true ? 'true' : 'false'")
+          if [ "$is_private" = "true" ]; then
+            echo "package.json has private=true. Set private=false before publishing." >&2
+            exit 1
+          fi
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: npm test
+
+      - name: Build package
+        if: steps.check.outputs.skip != 'true'
+        run: npm run build
+
+      - name: Publish to npm
+        if: steps.check.outputs.skip != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "Missing NPM_TOKEN secret. Configure it in Actions secrets or enable npm trusted publishing for this repository." >&2
+            exit 1
+          fi
+          npm publish --access public --provenance
+
+  dart-graphql-client:
+    name: pub.dev modular_api_graphql_client
+    runs-on: ubuntu-latest
+    needs: [validate, dart-rest-client]
+    defaults:
+      run:
+        working-directory: code/dart/modular_api_graphql_client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://pub.dev/api/packages/modular_api_graphql_client/versions/$version")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: modular_api_graphql_client $version is already on pub.dev. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for modular_api_rest_client on pub.dev
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          for i in $(seq 1 18); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "https://pub.dev/api/packages/modular_api_rest_client/versions/$version")
+            if [ "$status" = "200" ]; then
+              echo "Dependency modular_api_rest_client $version is available on pub.dev."
+              exit 0
+            fi
+            echo "Attempt $i/18: dependency not yet visible (HTTP $status). Retrying in 10s..."
+            sleep 10
+          done
+          echo "Dependency modular_api_rest_client $version not visible on pub.dev after ~3 minutes." >&2
+          exit 1
+
+      - name: Setup Dart
+        if: steps.check.outputs.skip != 'true'
+        uses: dart-lang/setup-dart@v1
+
+      - name: Dart pub get
+        if: steps.check.outputs.skip != 'true'
+        run: dart pub get
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: dart test
+
+      - name: Analyze
+        if: steps.check.outputs.skip != 'true'
+        run: dart analyze
+
+      - name: Configure pub.dev credentials
+        if: steps.check.outputs.skip != 'true'
+        env:
+          PUB_CREDENTIALS_JSON: ${{ secrets.DART_PUB_CREDENTIALS_JSON }}
+        run: |
+          if [ -z "$PUB_CREDENTIALS_JSON" ]; then
+            echo "Missing DART_PUB_CREDENTIALS_JSON secret in repository Actions secrets." >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.config/dart"
+          printf '%s' "$PUB_CREDENTIALS_JSON" > "$HOME/.config/dart/pub-credentials.json"
+
+      - name: Publish to pub.dev
+        if: steps.check.outputs.skip != 'true'
+        run: dart pub publish --force
+
+  dart-sqlserver:
+    name: pub.dev modular_api_sqlserver
+    runs-on: ubuntu-latest
+    needs: [validate, dart-core]
+    defaults:
+      run:
+        working-directory: code/dart/modular_api_sqlserver
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if already published
+        id: check
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://pub.dev/api/packages/modular_api_sqlserver/versions/$version")
+          if [ "$status" = "200" ]; then
+            echo "NOTICE: modular_api_sqlserver $version is already on pub.dev. Skipping publish (idempotent re-run)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for modular_api on pub.dev
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          for i in $(seq 1 18); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "https://pub.dev/api/packages/modular_api/versions/$version")
+            if [ "$status" = "200" ]; then
+              echo "Dependency modular_api $version is available on pub.dev."
+              exit 0
+            fi
+            echo "Attempt $i/18: dependency not yet visible (HTTP $status). Retrying in 10s..."
+            sleep 10
+          done
+          echo "Dependency modular_api $version not visible on pub.dev after ~3 minutes." >&2
+          exit 1
+
+      - name: Setup Dart
+        if: steps.check.outputs.skip != 'true'
+        uses: dart-lang/setup-dart@v1
+
+      - name: Dart pub get
+        if: steps.check.outputs.skip != 'true'
+        run: dart pub get
+
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: dart test test/db_client_test.dart
+
+      - name: Analyze
+        if: steps.check.outputs.skip != 'true'
+        run: dart analyze
+
+      - name: Configure pub.dev credentials
+        if: steps.check.outputs.skip != 'true'
+        env:
+          PUB_CREDENTIALS_JSON: ${{ secrets.DART_PUB_CREDENTIALS_JSON }}
+        run: |
+          if [ -z "$PUB_CREDENTIALS_JSON" ]; then
+            echo "Missing DART_PUB_CREDENTIALS_JSON secret in repository Actions secrets." >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.config/dart"
+          printf '%s' "$PUB_CREDENTIALS_JSON" > "$HOME/.config/dart/pub-credentials.json"
+
+      - name: Publish to pub.dev
+        if: steps.check.outputs.skip != 'true'
+        run: dart pub publish --force
+
+  # ---------------------------------------------------------------------------
+  # Final gate: all 15 packages must be visible at the release version.
+  # ---------------------------------------------------------------------------
+  verify:
+    name: Verify all 15 packages in registries
+    runs-on: ubuntu-latest
+    needs:
+      - validate
+      - ts-core
+      - ts-rest-client
+      - ts-sqlserver
+      - ts-postgres
+      - ts-graphql-client
+      - dart-core
+      - dart-rest-client
+      - dart-postgres
+      - dart-graphql-client
+      - dart-sqlserver
+      - py-core
+      - py-rest-client
+      - py-graphql-client
+      - py-sqlserver
+      - py-postgres
+    steps:
+      - name: Verify registries
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+          check() {
+            local label="$1" url="$2"
+            for i in $(seq 1 12); do
+              status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+              if [ "$status" = "200" ]; then
+                echo "OK   $label @ $version"
+                return 0
+              fi
+              sleep 10
+            done
+            echo "FAIL $label @ $version not found (last HTTP $status)" >&2
+            return 1
+          }
+          fail=0
+          check "npm @macss/modular-api"                     "https://registry.npmjs.org/@macss%2Fmodular-api/$version" || fail=1
+          check "npm @macss/modular-api-rest-client"         "https://registry.npmjs.org/@macss%2Fmodular-api-rest-client/$version" || fail=1
+          check "npm @macss/modular-api-graphql-client"      "https://registry.npmjs.org/@macss%2Fmodular-api-graphql-client/$version" || fail=1
+          check "npm @macss/modular-api-sqlserver"           "https://registry.npmjs.org/@macss%2Fmodular-api-sqlserver/$version" || fail=1
+          check "npm @macss/modular-api-postgres"            "https://registry.npmjs.org/@macss%2Fmodular-api-postgres/$version" || fail=1
+          check "pub.dev modular_api"                        "https://pub.dev/api/packages/modular_api/versions/$version" || fail=1
+          check "pub.dev modular_api_rest_client"            "https://pub.dev/api/packages/modular_api_rest_client/versions/$version" || fail=1
+          check "pub.dev modular_api_graphql_client"         "https://pub.dev/api/packages/modular_api_graphql_client/versions/$version" || fail=1
+          check "pub.dev modular_api_sqlserver"              "https://pub.dev/api/packages/modular_api_sqlserver/versions/$version" || fail=1
+          check "pub.dev modular_api_postgres"               "https://pub.dev/api/packages/modular_api_postgres/versions/$version" || fail=1
+          check "PyPI macss-modular-api"                     "https://pypi.org/pypi/macss-modular-api/$version/json" || fail=1
+          check "PyPI macss-modular-api-rest-client"         "https://pypi.org/pypi/macss-modular-api-rest-client/$version/json" || fail=1
+          check "PyPI macss-modular-api-graphql-client"      "https://pypi.org/pypi/macss-modular-api-graphql-client/$version/json" || fail=1
+          check "PyPI macss-modular-api-sqlserver"           "https://pypi.org/pypi/macss-modular-api-sqlserver/$version/json" || fail=1
+          check "PyPI macss-modular-api-postgres"            "https://pypi.org/pypi/macss-modular-api-postgres/$version/json" || fail=1
+          if [ "$fail" -ne 0 ]; then
+            echo "One or more packages are missing at version $version." >&2
+            exit 1
+          fi
+          echo "All 15 packages verified at version $version."

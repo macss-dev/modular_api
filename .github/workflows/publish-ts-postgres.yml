@@ -1,9 +1,8 @@
+# NOTE: el release coordinado del ecosistema se hace con release.yml (un solo tag v<version>).
+# Este workflow quedo solo con workflow_dispatch para republicacion individual de este paquete.
 name: Publish TypeScript Postgres
 
 on:
-  push:
-    tags:
-      - 'ts-modular_api_postgres-v*'
   workflow_dispatch:
 
 permissions:
