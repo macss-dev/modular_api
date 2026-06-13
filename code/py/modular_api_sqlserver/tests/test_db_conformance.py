@@ -3,7 +3,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from modular_api_sqlserver import DbConnectionSettings, DbFailure, DbFailureKind, DbResult
+from modular_api_sqlserver import (
+    DbCommand,
+    DbCommandKind,
+    DbConnectionSettings,
+    DbFailure,
+    DbFailureKind,
+    DbParameter,
+    DbProcedureOutcome,
+    DbResult,
+)
 
 
 def _load_fixture() -> dict[str, object]:
@@ -66,3 +75,44 @@ def test_matches_the_shared_db_result_fixture() -> None:
     )
 
     assert mapped_failure.failure.code == result_fixture["wrappedFailureCode"]
+
+
+def test_matches_the_shared_typed_parameter_and_stored_procedure_fixture() -> None:
+    command_fixture = _load_fixture()["command"]
+    input_fixture = command_fixture["inputParameter"]
+
+    input_parameter = DbParameter.input(
+        input_fixture["name"], input_fixture["value"], input_fixture["typeHint"]
+    )
+    assert input_parameter.name == input_fixture["name"]
+    assert input_parameter.value == input_fixture["value"]
+    assert input_parameter.type_hint == input_fixture["typeHint"]
+    assert input_parameter.direction.value == input_fixture["expectedDirection"]
+
+    output_fixture = command_fixture["outputParameter"]
+    output_parameter = DbParameter.output(output_fixture["name"], output_fixture["typeHint"])
+    assert output_parameter.value is None
+    assert output_parameter.direction.value == output_fixture["expectedDirection"]
+
+    command = DbCommand(
+        kind=DbCommandKind.PROCEDURE,
+        text=command_fixture["procedureName"],
+        parameters=(input_parameter,),
+    )
+    assert command.kind.value == "procedure"
+    assert command.text == command_fixture["procedureName"]
+    assert isinstance(command.parameters[0], DbParameter)
+
+    outcome_fixture = command_fixture["outcome"]
+    outcome = DbProcedureOutcome(
+        return_value=outcome_fixture["returnValue"],
+        output_parameters={
+            outcome_fixture["outputParameterName"]: outcome_fixture["outputParameterValue"]
+        },
+    )
+    assert outcome.return_value == outcome_fixture["returnValue"]
+    assert outcome.output_parameters is not None
+    assert (
+        outcome.output_parameters[outcome_fixture["outputParameterName"]]
+        == outcome_fixture["outputParameterValue"]
+    )

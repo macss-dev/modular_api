@@ -66,4 +66,48 @@ void main() {
 
     expect(mappedFailure.failure.code, resultFixture['wrappedFailureCode']);
   });
+
+  test('matches the shared typed-parameter and stored-procedure fixture (0.6.0)', () {
+    final commandFixture = fixture['command'] as Map<String, Object?>;
+    final inputFixture = commandFixture['inputParameter'] as Map<String, Object?>;
+    final input = DbParameter.input(
+      inputFixture['name'] as String,
+      inputFixture['value'],
+      inputFixture['typeHint'] as String,
+    );
+    expect(input.name, inputFixture['name']);
+    expect(input.value, inputFixture['value']);
+    expect(input.typeHint, inputFixture['typeHint']);
+    expect(input.direction.name, inputFixture['expectedDirection']);
+
+    final outputFixture = commandFixture['outputParameter'] as Map<String, Object?>;
+    final output = DbParameter.output(
+      outputFixture['name'] as String,
+      outputFixture['typeHint'] as String,
+    );
+    expect(output.value, isNull);
+    expect(output.direction.name, outputFixture['expectedDirection']);
+
+    final command = DbCommand(
+      kind: DbCommandKind.procedure,
+      text: commandFixture['procedureName'] as String,
+      parameters: [input],
+    );
+    expect(command.kind.name, 'procedure');
+    expect(command.text, commandFixture['procedureName']);
+    expect(command.parameters[0], isA<DbParameter>());
+
+    final outcomeFixture = commandFixture['outcome'] as Map<String, Object?>;
+    final outcome = DbProcedureOutcome(
+      returnValue: outcomeFixture['returnValue'],
+      outputParameters: {
+        outcomeFixture['outputParameterName'] as String: outcomeFixture['outputParameterValue'],
+      },
+    );
+    expect(outcome.returnValue, outcomeFixture['returnValue']);
+    expect(
+      outcome.outputParameters?[outcomeFixture['outputParameterName']],
+      outcomeFixture['outputParameterValue'],
+    );
+  });
 }

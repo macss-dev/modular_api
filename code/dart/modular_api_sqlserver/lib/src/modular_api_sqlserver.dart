@@ -1,6 +1,8 @@
 import 'dart:io';
 
-enum DbCommandKind { query, execute, batch, scalar }
+enum DbCommandKind { query, execute, batch, scalar, procedure }
+
+enum DbParameterDirection { input, output, inputOutput }
 
 enum DbFailureKind {
   connectivity,
@@ -76,6 +78,44 @@ final class DbCommand {
   final String? label;
 }
 
+final class DbParameter {
+  const DbParameter({
+    required this.name,
+    this.value,
+    this.direction = DbParameterDirection.input,
+    this.typeHint,
+  });
+
+  factory DbParameter.input(String name, Object? value, [String? typeHint]) =>
+      DbParameter(name: name, value: value, typeHint: typeHint);
+
+  factory DbParameter.output(String name, [String? typeHint]) => DbParameter(
+        name: name,
+        direction: DbParameterDirection.output,
+        typeHint: typeHint,
+      );
+
+  factory DbParameter.inputOutput(String name, Object? value, [String? typeHint]) =>
+      DbParameter(
+        name: name,
+        value: value,
+        direction: DbParameterDirection.inputOutput,
+        typeHint: typeHint,
+      );
+
+  final String name;
+  final Object? value;
+  final DbParameterDirection direction;
+  final String? typeHint;
+}
+
+final class DbProcedureOutcome {
+  const DbProcedureOutcome({this.returnValue, this.outputParameters});
+
+  final Object? returnValue;
+  final Map<String, Object?>? outputParameters;
+}
+
 final class DbExecutionMetadata {
   const DbExecutionMetadata({
     required this.duration,
@@ -91,20 +131,27 @@ final class DbExecutionMetadata {
 }
 
 final class DbRowSet {
-  const DbRowSet({required this.rows, required this.metadata});
+  const DbRowSet({
+    required this.rows,
+    required this.metadata,
+    this.procedure,
+  });
 
   final List<Map<String, Object?>> rows;
   final DbExecutionMetadata metadata;
+  final DbProcedureOutcome? procedure;
 }
 
 final class DbExecutionSummary {
   const DbExecutionSummary({
     required this.affectedCount,
     required this.metadata,
+    this.procedure,
   });
 
   final int affectedCount;
   final DbExecutionMetadata metadata;
+  final DbProcedureOutcome? procedure;
 }
 
 final class DbScalar<T> {

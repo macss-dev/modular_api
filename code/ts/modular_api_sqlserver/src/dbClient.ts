@@ -3,6 +3,13 @@ export enum DbCommandKind {
   execute = 'execute',
   batch = 'batch',
   scalar = 'scalar',
+  procedure = 'procedure',
+}
+
+export enum DbParameterDirection {
+  input = 'input',
+  output = 'output',
+  inputOutput = 'inputOutput',
 }
 
 export enum DbFailureKind {
@@ -93,6 +100,47 @@ export class DbCommand {
   }
 }
 
+export class DbParameter {
+  public readonly name: string;
+  public readonly value: unknown;
+  public readonly direction: DbParameterDirection;
+  public readonly typeHint?: string;
+
+  public constructor(options: {
+    name: string;
+    value?: unknown;
+    direction?: DbParameterDirection;
+    typeHint?: string;
+  }) {
+    this.name = options.name;
+    this.value = options.value;
+    this.direction = options.direction ?? DbParameterDirection.input;
+    this.typeHint = options.typeHint;
+  }
+
+  public static input(name: string, value: unknown, typeHint?: string): DbParameter {
+    return new DbParameter({ name, value, direction: DbParameterDirection.input, typeHint });
+  }
+
+  public static output(name: string, typeHint?: string): DbParameter {
+    return new DbParameter({ name, direction: DbParameterDirection.output, typeHint });
+  }
+
+  public static inputOutput(name: string, value: unknown, typeHint?: string): DbParameter {
+    return new DbParameter({ name, value, direction: DbParameterDirection.inputOutput, typeHint });
+  }
+}
+
+export class DbProcedureOutcome {
+  public readonly returnValue?: unknown;
+  public readonly outputParameters?: Record<string, unknown>;
+
+  public constructor(options: { returnValue?: unknown; outputParameters?: Record<string, unknown> }) {
+    this.returnValue = options.returnValue;
+    this.outputParameters = options.outputParameters;
+  }
+}
+
 export class DbExecutionMetadata {
   public readonly duration: number;
   public readonly commandLabel?: string;
@@ -115,20 +163,32 @@ export class DbExecutionMetadata {
 export class DbRowSet {
   public readonly rows: Array<Record<string, unknown>>;
   public readonly metadata: DbExecutionMetadata;
+  public readonly procedure?: DbProcedureOutcome;
 
-  public constructor(options: { rows: Array<Record<string, unknown>>; metadata: DbExecutionMetadata }) {
+  public constructor(options: {
+    rows: Array<Record<string, unknown>>;
+    metadata: DbExecutionMetadata;
+    procedure?: DbProcedureOutcome;
+  }) {
     this.rows = [...options.rows];
     this.metadata = options.metadata;
+    this.procedure = options.procedure;
   }
 }
 
 export class DbExecutionSummary {
   public readonly affectedCount: number;
   public readonly metadata: DbExecutionMetadata;
+  public readonly procedure?: DbProcedureOutcome;
 
-  public constructor(options: { affectedCount: number; metadata: DbExecutionMetadata }) {
+  public constructor(options: {
+    affectedCount: number;
+    metadata: DbExecutionMetadata;
+    procedure?: DbProcedureOutcome;
+  }) {
     this.affectedCount = options.affectedCount;
     this.metadata = options.metadata;
+    this.procedure = options.procedure;
   }
 }
 

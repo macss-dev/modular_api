@@ -357,6 +357,107 @@ void main() {
       expect(report.details, 'timeout');
     });
   });
+
+  group('DbParameter (0.6.0 typed parameters)', () {
+    test('input() captures name, value and an optional free-form type hint', () {
+      final plain = DbParameter.input('id', 42);
+      expect(plain.name, 'id');
+      expect(plain.value, 42);
+      expect(plain.direction, DbParameterDirection.input);
+      expect(plain.typeHint, isNull);
+
+      final hinted = DbParameter.input('picture', [1, 2, 3], 'varbinary(max)');
+      expect(hinted.direction, DbParameterDirection.input);
+      expect(hinted.typeHint, 'varbinary(max)');
+    });
+
+    test('output() carries no input value and defaults its direction', () {
+      final out = DbParameter.output('total', 'int');
+      expect(out.name, 'total');
+      expect(out.value, isNull);
+      expect(out.direction, DbParameterDirection.output);
+      expect(out.typeHint, 'int');
+    });
+
+    test('inputOutput() marks bidirectional parameters', () {
+      final io = DbParameter.inputOutput('counter', 1, 'int');
+      expect(io.direction, DbParameterDirection.inputOutput);
+      expect(io.value, 1);
+    });
+
+    test('defaults the direction to input when constructed directly', () {
+      const param = DbParameter(name: 'name', value: 'foto.jpg');
+      expect(param.direction, DbParameterDirection.input);
+    });
+
+    test('flows through DbCommand.parameters unchanged', () {
+      const command = DbCommand(
+        kind: DbCommandKind.procedure,
+        text: 'spEliminarFoto',
+        parameters: [
+          DbParameter(name: 'nombre', value: 'foto.jpg'),
+          'positional-still-allowed',
+        ],
+      );
+      expect(command.parameters, hasLength(2));
+      expect(command.parameters[0], isA<DbParameter>());
+      expect((command.parameters[0]! as DbParameter).name, 'nombre');
+      expect(command.parameters[1], 'positional-still-allowed');
+    });
+  });
+
+  group('DbCommandKind.procedure (0.6.0)', () {
+    test('exposes the new procedure kind', () {
+      expect(DbCommandKind.values, contains(DbCommandKind.procedure));
+    });
+  });
+
+  group('DbProcedureOutcome (0.6.0)', () {
+    test('carries an engine-agnostic return value and output parameters', () {
+      const outcome = DbProcedureOutcome(
+        returnValue: 0,
+        outputParameters: {'total': 5},
+      );
+      expect(outcome.returnValue, 0);
+      expect(outcome.outputParameters, {'total': 5});
+    });
+
+    test('allows both fields to be absent', () {
+      const empty = DbProcedureOutcome();
+      expect(empty.returnValue, isNull);
+      expect(empty.outputParameters, isNull);
+    });
+
+    test('attaches optionally to DbRowSet without breaking existing construction', () {
+      const withoutOutcome = DbRowSet(
+        rows: [{'id': 1}],
+        metadata: DbExecutionMetadata(duration: Duration(milliseconds: 1)),
+      );
+      expect(withoutOutcome.procedure, isNull);
+
+      const withOutcome = DbRowSet(
+        rows: [{'id': 1}],
+        metadata: DbExecutionMetadata(duration: Duration(milliseconds: 1)),
+        procedure: DbProcedureOutcome(returnValue: 0),
+      );
+      expect(withOutcome.procedure?.returnValue, 0);
+    });
+
+    test('attaches optionally to DbExecutionSummary without breaking existing construction', () {
+      const withoutOutcome = DbExecutionSummary(
+        affectedCount: 1,
+        metadata: DbExecutionMetadata(duration: Duration(milliseconds: 1)),
+      );
+      expect(withoutOutcome.procedure, isNull);
+
+      const withOutcome = DbExecutionSummary(
+        affectedCount: 1,
+        metadata: DbExecutionMetadata(duration: Duration(milliseconds: 1)),
+        procedure: DbProcedureOutcome(outputParameters: {'id': 99}),
+      );
+      expect(withOutcome.procedure?.outputParameters, {'id': 99});
+    });
+  });
 }
 
 final class _FakeSessionProvider implements DbSessionProvider<String> {
