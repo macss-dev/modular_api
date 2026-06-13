@@ -1,6 +1,6 @@
 {
   "name": "@macss/modular-api-graphql-client",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": false,
   "description": "Official MACSS outbound GraphQL client for TypeScript.",
   "main": "dist/index.js",
@@ -31,7 +31,7 @@
   },
   "homepage": "https://github.com/ccisnedev/modular_api/tree/main/code/ts/modular_api_graphql_client#readme",
   "dependencies": {
-    "@macss/modular-api-rest-client": "^0.5.0"
+    "@macss/modular-api-rest-client": "^0.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.19.11",
