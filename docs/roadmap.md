@@ -1,6 +1,9 @@
 # modular_api - Product Roadmap
 
-This roadmap is intentionally focused on the API product itself: the core runtime, the plugin ecosystem, and the next official capabilities. It excludes unrelated future initiatives that are not part of the current direction.
+This roadmap is deliberately honest about where the project actually is. The plugin
+infrastructure, the official operational plugins, the GraphQL runtime, and the complementary
+packages are already shipped. The architecture is complete. What remains, up to `1.0.0`, is
+refinement of what already exists — not new foundational capabilities.
 
 ---
 
@@ -9,133 +12,87 @@ This roadmap is intentionally focused on the API product itself: the core runtim
 Every release must be coherent on its own.
 
 - **Major** - breaking changes to the core contract or plugin contract
-- **Minor** - new capabilities, new plugins, new public APIs
+- **Minor** - new capabilities, new public APIs
 - **Patch** - bug fixes, documentation, and performance improvements
 
+**Up to `1.0.0`, every release is a fix or an improvement of the already-implemented
+architecture, not a fundamentally new capability.** The `0.x` line refines, hardens, and
+consolidates the surfaces that already shipped. `1.0.0` is the point at which the ecosystem is
+declared stable for long-term support.
+
+A consequence worth stating explicitly: some improvements *reduce* surface rather than add it.
+For example, converging the six database packages (`sqlserver` + `postgres` across the three SDKs)
+into a single `modular_api_sql` contracts package per SDK — dropping the count from 15 packages to
+12 — is an improvement of what already exists, not a new feature. We do not commit to a version
+number for that change; it lands when it is ready, under the same semver rules.
+
 ---
 
-## Current State - v0.4.7
+## Current State - 0.6.0
 
-`modular_api` currently provides:
+`modular_api` provides, verified across Dart, TypeScript, and Python:
 
-- Official SDKs in Dart, TypeScript, and Python
 - A modular REST API model based on modules, DTOs, and use cases
-- A public plugin host in all three SDKs
-- Deterministic plugin lifecycle orchestration: setup, validation, freeze, and shutdown
-- Request-scoped structured logging
-- Three public middleware slots with deterministic runtime ordering: `preRouting`, `preHandler`, and `postHandler`
-- Host-owned plugin-pipeline guardrails: attributable middleware short-circuits in request logs and structured JSON `500` responses for uncaught plugin-pipeline failures
-- Official `HealthPlugin`, `OpenApiPlugin`, and `DocsPlugin` mounted under the shared `basePath`
-- Plugin-hosted health checks and Prometheus metrics endpoints under the shared `basePath`
-- Cross-language parity tests across the three SDKs
-
-The main remaining gaps for the v0.5.0 milestone are broader startup-validation
-coverage, the public metrics capability surface, and the final reference-plugin
-and migration docs.
-
----
-
-## v0.5.0 - Plugin Infrastructure
-
-> The immediate goal is to formalize the plugin ecosystem and reduce the core to its essential responsibilities.
-
-### Core Scope After the Refactor
-
-The core should know only about:
-
-- Modules
-- Use cases and DTO contracts
-- Common request lifecycle
-- HTTP middleware pipeline
-- Request-scoped logger context
-- Plugin host
-
-### Deliverables
-
-- [x] Add a public `.plugin()` API to `ModularApi`
-- [x] Define a public plugin contract in all three SDKs
-- [x] Define startup validation for plugin names, route collisions, and capability dependencies
-- [x] Define middleware slots that plugins can target with deterministic ordering
-- [x] Tighten middleware guardrails so plugins cannot bypass the approved core pipeline unintentionally
-- [x] Define a module-extension mechanism so plugins can attach module-scoped metadata without polluting the core API
-- [x] Define a capability registry so plugins can expose and consume shared services
-- [x] Document how to build custom plugins for Dart, TypeScript, and Python
-- [ ] Provide a minimal reference plugin built only on the public contract
-
-### Official Plugins in This Stage
-
-- [x] `HealthPlugin` - owns `/{basePath}/health` and health-check registration
-- [ ] `MetricsPlugin` - owns `/{basePath}/metrics`, the HTTP metrics middleware, and the public metrics registrar
-- [x] `OpenApiPlugin` - owns `/{basePath}/openapi.json` and `/{basePath}/openapi.yaml`
-- [x] `DocsPlugin` - owns `/{basePath}/docs` and consumes the OpenAPI capability instead of rebuilding the spec itself
-
-### Endpoint Policy
-
-- Every public endpoint resolves under the shared `basePath`.
-- `/{basePath}/docs` remains the canonical human-facing documentation endpoint.
-- `/{basePath}/openapi.json` and `/{basePath}/openapi.yaml` remain the raw machine-facing contract endpoints.
-- `/{basePath}/health` and `/{basePath}/metrics` remain the canonical operational endpoints.
-
-### Exit Criterion
-
-A developer outside the project can build and mount a custom plugin using the same public contract used by the official plugins.
+- A public plugin host with deterministic lifecycle orchestration (setup, validation, freeze,
+  shutdown) and three ordered middleware slots (`preRouting`, `preHandler`, `postHandler`)
+- Host-owned plugin-pipeline guardrails: attributable middleware short-circuits in request logs
+  and structured JSON `500` responses for uncaught plugin-pipeline failures
+- Official `HealthPlugin`, `MetricsPlugin`, `OpenApiPlugin`, and `DocsPlugin` under the shared
+  `basePath`, plus plugin routes that are first-class in OpenAPI and metrics (ADR-0003)
+- An official GraphQL runtime plugin mounted at `/{basePath}/graphql`, with catalog, metadata,
+  SDL, artifact, and SQL Server read-compiler surfaces
+- Fifteen ecosystem packages: core SDK, REST client, GraphQL client, SQL Server, and Postgres —
+  one of each per SDK — released under a single coordinated version (ADR-0002)
+- Contracts-only database packages (ADR-0004): engine-agnostic `DbClient`, repository, and
+  transaction contracts, with typed command parameters (`DbParameter`) and stored-procedure
+  support (`DbCommandKind.procedure`, `DbProcedureOutcome`) as of 0.6.0
+- Request-scoped structured logging and cross-language parity tests across the three SDKs
 
 ---
 
-## v0.6.0 - Optional GraphQL Plugin
+## History-Based Timeline
 
-> GraphQL is future work. It matters now only as a design constraint for the plugin system.
-
-### Goals
-
-- [ ] Implement an official GraphQL plugin for queries
-- [ ] Keep commands as REST use cases provided by the core module system
-- [ ] Make CQRS an optional architecture profile activated by the GraphQL plugin
-- [ ] Preserve REST-only APIs as a first-class supported mode
-- [ ] Reuse the same logging context, middleware pipeline, and plugin host introduced in v0.5.0
-
-### Exit Criterion
-
-An API can run in either of these modes without changing the core model:
-
-- REST-only
-- REST commands + GraphQL queries through the official plugin
+```
+0.4.5  Schema/OpenAPI/CORS/logging parity hardening across Dart, TypeScript, and Python
+0.4.6  Synchronized SDK versioning policy and package-layout cleanup
+0.4.7  Plugin host guardrails, official runtime plugins, GraphQL runtime, and complementary packages
+0.4.8  Flutter web compatibility (rest_client rewritten to package:http); first full end-to-end
+       verification (PostgreSQL + Dart + Flutter web + 41/41 Playwright tests)
+0.5.0  Ecosystem-wide coordinated bump of all packages; docs/contracts aligned with shipped state;
+       semver enforced from this version forward (ADR-0002)
+0.6.0  Database contract hardening: typed parameters and stored-procedure support, contracts-only
+       stance formalized (ADR-0004)
+```
 
 ---
 
-## v0.7.0 - Foundation Hardening
+## The Road to 1.0.0
 
-> After the plugin host exists, the focus shifts to stability, docs, and maintainability.
+These are improvements of the existing architecture, not new foundations. They land under semver
+when ready; no version numbers are pre-assigned.
 
-- [ ] Migrate the generated spec to OpenAPI 3.1 when compatibility work is ready
-- [ ] Strengthen CI/CD for all three SDKs
-- [ ] Add plugin compatibility tests across languages
-- [ ] Write contribution guides and style guides per language
-- [ ] Document migration guidance for users moving from core-managed global endpoints to plugins
-
-### Exit Criterion
-
-A new contributor can read the docs, create a module, enable the official plugins they want, and run the same conceptual API in Dart, TypeScript, and Python.
+- **Converge the database packages** toward a single `modular_api_sql` contracts package per SDK
+  (and, later, `modular_api_nosql`), since the per-engine contracts differ only in
+  `DbConnectionSettings`. Reduces 15 packages to 12. (ADR-0004)
+- **Align the Python database contracts to async**, matching the ASGI core (issue #23).
+- **Remove the `dart_odbc` dependency** from the Dart `modular_api_sqlserver` package so it stays
+  contracts-only; driver-backed schema introspection becomes the consumer's responsibility or a
+  docs example (issue #24).
+- **Migrate the generated spec to OpenAPI 3.1** when the compatibility work is ready.
+- **Strengthen CI/CD and contributor experience**: per-language style and contribution guides,
+  broader cross-language plugin and GraphQL compatibility tests.
+- **Document the optional CQRS profile** (REST commands + GraphQL queries) and keep REST-only APIs
+  a first-class supported mode in examples and docs.
 
 ---
 
 ## Invariants
 
-These points do not change across milestones:
+These do not change across releases:
 
 1. The core stays minimal.
-2. Official plugins must use the same public contract as third-party plugins.
+2. Official plugins use the same public contract as third-party plugins.
 3. REST-only APIs remain valid with or without optional plugins.
 4. `/{basePath}/docs` stays the canonical interactive documentation endpoint.
-5. CQRS is optional and only becomes active when the future GraphQL plugin is enabled.
-
----
-
-## Summary Timeline
-
-```
-v0.4.7  Current state: core + directly mounted global capabilities
-v0.5.0  Plugin infrastructure + official global plugins
-v0.6.0  Optional GraphQL plugin and optional CQRS profile
-v0.7.0  Foundation hardening and contributor experience
-```
+5. CQRS is optional and only active when the GraphQL plugin is enabled.
+6. Database packages are contracts-only; the framework ships no driver binding (ADR-0004).

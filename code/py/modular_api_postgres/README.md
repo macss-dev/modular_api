@@ -32,10 +32,12 @@ else:
 
 See [example/example.py](example/example.py) for a complete in-memory wiring sample.
 
-## Current slice
+## What this package provides
 
 - normalized Postgres connection defaults and redacted summaries
 - engine-agnostic `DbClient`, `DbRepository`, and transaction contracts
 - explicit lease ownership semantics for package-owned and application-owned sessions
 - health contributor and GraphQL support bundle for higher-level integrations
-- real driver bindings intentionally remain outside this first slice
+- the application supplies the driver binding (adapter) for its chosen engine and driver
+
+This package is **contracts-only by design** and will never ship a driver binding; you choose your engine and driver and provide the adapter. See [ADR-0004](../../../docs/adr/0004-contracts-only-database-packages.md).
