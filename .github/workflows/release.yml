@@ -51,7 +51,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Determine release version
         id: version
@@ -110,7 +110,7 @@ jobs:
         working-directory: code/ts/modular_api
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -126,7 +126,7 @@ jobs:
 
       - name: Setup Node.js
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -169,7 +169,7 @@ jobs:
         working-directory: code/ts/modular_api_rest_client
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -185,7 +185,7 @@ jobs:
 
       - name: Setup Node.js
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -227,7 +227,7 @@ jobs:
         working-directory: code/ts/modular_api_sqlserver
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -243,7 +243,7 @@ jobs:
 
       - name: Setup Node.js
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -294,7 +294,7 @@ jobs:
         working-directory: code/ts/modular_api_postgres
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -310,7 +310,7 @@ jobs:
 
       - name: Setup Node.js
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -358,7 +358,7 @@ jobs:
         working-directory: code/dart/modular_api
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -413,7 +413,7 @@ jobs:
         working-directory: code/dart/modular_api_rest_client
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -468,7 +468,7 @@ jobs:
         working-directory: code/dart/modular_api_postgres
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -523,7 +523,7 @@ jobs:
         working-directory: code/py/modular_api
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -539,7 +539,7 @@ jobs:
 
       - name: Setup Python
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -576,7 +576,7 @@ jobs:
         working-directory: code/py/modular_api_rest_client
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -592,7 +592,7 @@ jobs:
 
       - name: Setup Python
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -633,7 +633,7 @@ jobs:
         working-directory: code/py/modular_api_graphql_client
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -649,7 +649,7 @@ jobs:
 
       - name: Setup Python
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -690,7 +690,7 @@ jobs:
         working-directory: code/py/modular_api_sqlserver
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -706,7 +706,7 @@ jobs:
 
       - name: Setup Python
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -747,7 +747,7 @@ jobs:
         working-directory: code/py/modular_api_postgres
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -763,7 +763,7 @@ jobs:
 
       - name: Setup Python
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -810,7 +810,7 @@ jobs:
         working-directory: code/ts/modular_api_graphql_client
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -842,7 +842,7 @@ jobs:
 
       - name: Setup Node.js
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -892,7 +892,7 @@ jobs:
         working-directory: code/dart/modular_api_graphql_client
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
@@ -963,7 +963,7 @@ jobs:
         working-directory: code/dart/modular_api_sqlserver
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if already published
         id: check
