@@ -16,6 +16,9 @@ from modular_api_postgres import (
     DbGraphqlSupport,
     DbHealthContributor,
     DbHealthStatus,
+    DbParameter,
+    DbParameterDirection,
+    DbProcedureOutcome,
     DbProviderDescription,
     DbRepository,
     DbRepositoryContext,
@@ -476,3 +479,97 @@ class _UserStatsRepository(DbRepository[str]):
             )
         )
         return result.map(lambda value: int(value.value))
+
+
+# --- 0.6.0: typed parameters and stored-procedure support ---
+
+
+def test_db_parameter_input_captures_name_value_and_optional_type_hint() -> None:
+    plain = DbParameter.input("id", 42)
+    assert plain.name == "id"
+    assert plain.value == 42
+    assert plain.direction is DbParameterDirection.INPUT
+    assert plain.type_hint is None
+
+    hinted = DbParameter.input("payload", b"\x01\x02\x03", "bytea")
+    assert hinted.direction is DbParameterDirection.INPUT
+    assert hinted.type_hint == "bytea"
+
+
+def test_db_parameter_output_carries_no_input_value_and_defaults_direction() -> None:
+    out = DbParameter.output("total", "integer")
+    assert out.name == "total"
+    assert out.value is None
+    assert out.direction is DbParameterDirection.OUTPUT
+    assert out.type_hint == "integer"
+
+
+def test_db_parameter_input_output_marks_bidirectional_parameters() -> None:
+    io = DbParameter.input_output("counter", 1, "integer")
+    assert io.direction is DbParameterDirection.INPUT_OUTPUT
+    assert io.value == 1
+
+
+def test_db_parameter_defaults_direction_to_input_when_constructed_directly() -> None:
+    param = DbParameter(name="name", value="foto.jpg")
+    assert param.direction is DbParameterDirection.INPUT
+
+
+def test_db_parameter_flows_through_db_command_parameters_unchanged() -> None:
+    command = DbCommand(
+        kind=DbCommandKind.PROCEDURE,
+        text="fn_eliminar_foto",
+        parameters=(DbParameter.input("nombre", "foto.jpg"), "positional-still-allowed"),
+    )
+    assert len(command.parameters) == 2
+    assert isinstance(command.parameters[0], DbParameter)
+    assert command.parameters[0].name == "nombre"
+    assert command.parameters[1] == "positional-still-allowed"
+
+
+def test_db_command_kind_exposes_procedure() -> None:
+    assert DbCommandKind.PROCEDURE.value == "procedure"
+
+
+def test_db_procedure_outcome_carries_return_value_and_output_parameters() -> None:
+    outcome = DbProcedureOutcome(return_value=0, output_parameters={"total": 5})
+    assert outcome.return_value == 0
+    assert outcome.output_parameters == {"total": 5}
+
+
+def test_db_procedure_outcome_allows_both_fields_to_be_absent() -> None:
+    empty = DbProcedureOutcome()
+    assert empty.return_value is None
+    assert empty.output_parameters is None
+
+
+def test_db_procedure_outcome_attaches_optionally_to_db_row_set() -> None:
+    without_outcome = DbRowSet(
+        rows=[{"id": 1}],
+        metadata=DbExecutionMetadata(duration=1),
+    )
+    assert without_outcome.procedure is None
+
+    with_outcome = DbRowSet(
+        rows=[{"id": 1}],
+        metadata=DbExecutionMetadata(duration=1),
+        procedure=DbProcedureOutcome(return_value=0),
+    )
+    assert with_outcome.procedure is not None
+    assert with_outcome.procedure.return_value == 0
+
+
+def test_db_procedure_outcome_attaches_optionally_to_db_execution_summary() -> None:
+    without_outcome = DbExecutionSummary(
+        affected_count=1,
+        metadata=DbExecutionMetadata(duration=1),
+    )
+    assert without_outcome.procedure is None
+
+    with_outcome = DbExecutionSummary(
+        affected_count=1,
+        metadata=DbExecutionMetadata(duration=1),
+        procedure=DbProcedureOutcome(output_parameters={"id": 99}),
+    )
+    assert with_outcome.procedure is not None
+    assert with_outcome.procedure.output_parameters == {"id": 99}

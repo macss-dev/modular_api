@@ -3,6 +3,9 @@ import {
   DbCommand,
   DbCommandKind,
   DbConnectionSettings,
+  DbParameter,
+  DbParameterDirection,
+  DbProcedureOutcome,
   DbExecutionMetadata,
   DbExecutionSummary,
   DbFailure,
@@ -366,6 +369,104 @@ describe('DbRepository and health', () => {
 
     expect(report.status).toBe(DbHealthStatus.unhealthy);
     expect(report.details).toBe('timeout');
+  });
+});
+
+describe('DbParameter (0.6.0 typed parameters)', () => {
+  it('input() captures name, value and an optional free-form type hint', () => {
+    const plain = DbParameter.input('id', 42);
+    expect(plain.name).toBe('id');
+    expect(plain.value).toBe(42);
+    expect(plain.direction).toBe(DbParameterDirection.input);
+    expect(plain.typeHint).toBeUndefined();
+
+    const hinted = DbParameter.input('payload', Buffer.from([1, 2, 3]), 'bytea');
+    expect(hinted.direction).toBe(DbParameterDirection.input);
+    expect(hinted.typeHint).toBe('bytea');
+  });
+
+  it('output() carries no input value and defaults its direction', () => {
+    const out = DbParameter.output('total', 'integer');
+    expect(out.name).toBe('total');
+    expect(out.value).toBeUndefined();
+    expect(out.direction).toBe(DbParameterDirection.output);
+    expect(out.typeHint).toBe('integer');
+  });
+
+  it('inputOutput() marks bidirectional parameters', () => {
+    const io = DbParameter.inputOutput('counter', 1, 'integer');
+    expect(io.direction).toBe(DbParameterDirection.inputOutput);
+    expect(io.value).toBe(1);
+  });
+
+  it('defaults the direction to input when constructed directly', () => {
+    const param = new DbParameter({ name: 'name', value: 'foto.jpg' });
+    expect(param.direction).toBe(DbParameterDirection.input);
+  });
+
+  it('flows through DbCommand.parameters unchanged (no DbCommand signature change)', () => {
+    const command = new DbCommand({
+      kind: DbCommandKind.procedure,
+      text: 'fn_eliminar_foto',
+      parameters: [DbParameter.input('nombre', 'foto.jpg'), 'positional-still-allowed'],
+    });
+    expect(command.parameters).toHaveLength(2);
+    expect(command.parameters[0]).toBeInstanceOf(DbParameter);
+    expect((command.parameters[0] as DbParameter).name).toBe('nombre');
+    expect(command.parameters[1]).toBe('positional-still-allowed');
+  });
+});
+
+describe('DbCommandKind.procedure (0.6.0)', () => {
+  it('exposes the new procedure kind', () => {
+    expect(DbCommandKind.procedure).toBe('procedure');
+  });
+});
+
+describe('DbProcedureOutcome (0.6.0)', () => {
+  it('carries an engine-agnostic return value and output parameters', () => {
+    const outcome = new DbProcedureOutcome({
+      returnValue: 0,
+      outputParameters: { total: 5 },
+    });
+    expect(outcome.returnValue).toBe(0);
+    expect(outcome.outputParameters).toEqual({ total: 5 });
+  });
+
+  it('allows both fields to be absent', () => {
+    const empty = new DbProcedureOutcome({});
+    expect(empty.returnValue).toBeUndefined();
+    expect(empty.outputParameters).toBeUndefined();
+  });
+
+  it('attaches optionally to DbRowSet without breaking existing construction', () => {
+    const withoutOutcome = new DbRowSet({
+      rows: [{ id: 1 }],
+      metadata: new DbExecutionMetadata({ duration: 1 }),
+    });
+    expect(withoutOutcome.procedure).toBeUndefined();
+
+    const withOutcome = new DbRowSet({
+      rows: [{ id: 1 }],
+      metadata: new DbExecutionMetadata({ duration: 1 }),
+      procedure: new DbProcedureOutcome({ returnValue: 0 }),
+    });
+    expect(withOutcome.procedure?.returnValue).toBe(0);
+  });
+
+  it('attaches optionally to DbExecutionSummary without breaking existing construction', () => {
+    const withoutOutcome = new DbExecutionSummary({
+      affectedCount: 1,
+      metadata: new DbExecutionMetadata({ duration: 1 }),
+    });
+    expect(withoutOutcome.procedure).toBeUndefined();
+
+    const withOutcome = new DbExecutionSummary({
+      affectedCount: 1,
+      metadata: new DbExecutionMetadata({ duration: 1 }),
+      procedure: new DbProcedureOutcome({ outputParameters: { id: 99 } }),
+    });
+    expect(withOutcome.procedure?.outputParameters).toEqual({ id: 99 });
   });
 });
 

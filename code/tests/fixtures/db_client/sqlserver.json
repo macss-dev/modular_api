@@ -28,5 +28,24 @@
     "flatMappedValue": 22,
     "timeoutCode": "timeout",
     "wrappedFailureCode": "wrapped_timeout"
+  },
+  "command": {
+    "procedureName": "spEliminarFoto",
+    "inputParameter": {
+      "name": "id",
+      "value": 42,
+      "typeHint": "int",
+      "expectedDirection": "input"
+    },
+    "outputParameter": {
+      "name": "total",
+      "typeHint": "int",
+      "expectedDirection": "output"
+    },
+    "outcome": {
+      "returnValue": 0,
+      "outputParameterName": "total",
+      "outputParameterValue": 5
+    }
   }
 }

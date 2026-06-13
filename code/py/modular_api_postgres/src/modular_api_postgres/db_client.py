@@ -17,6 +17,13 @@ class DbCommandKind(str, Enum):
     EXECUTE = "execute"
     BATCH = "batch"
     SCALAR = "scalar"
+    PROCEDURE = "procedure"
+
+
+class DbParameterDirection(str, Enum):
+    INPUT = "input"
+    OUTPUT = "output"
+    INPUT_OUTPUT = "inputOutput"
 
 
 class DbFailureKind(str, Enum):
@@ -82,6 +89,39 @@ class DbConnectionSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class DbParameter:
+    name: str
+    value: object | None = None
+    direction: DbParameterDirection = DbParameterDirection.INPUT
+    type_hint: str | None = None
+
+    @classmethod
+    def input(cls, name: str, value: object | None, type_hint: str | None = None) -> DbParameter:
+        return cls(name=name, value=value, direction=DbParameterDirection.INPUT, type_hint=type_hint)
+
+    @classmethod
+    def output(cls, name: str, type_hint: str | None = None) -> DbParameter:
+        return cls(name=name, direction=DbParameterDirection.OUTPUT, type_hint=type_hint)
+
+    @classmethod
+    def input_output(
+        cls, name: str, value: object | None, type_hint: str | None = None
+    ) -> DbParameter:
+        return cls(
+            name=name,
+            value=value,
+            direction=DbParameterDirection.INPUT_OUTPUT,
+            type_hint=type_hint,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DbProcedureOutcome:
+    return_value: object | None = None
+    output_parameters: Mapping[str, object] | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class DbCommand:
     kind: DbCommandKind
     text: str
@@ -101,12 +141,14 @@ class DbExecutionMetadata:
 class DbRowSet:
     rows: list[Mapping[str, object]]
     metadata: DbExecutionMetadata
+    procedure: DbProcedureOutcome | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class DbExecutionSummary:
     affected_count: int
     metadata: DbExecutionMetadata
+    procedure: DbProcedureOutcome | None = None
 
 
 @dataclass(frozen=True, slots=True)
