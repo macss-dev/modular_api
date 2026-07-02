@@ -1,38 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 
-/// RFC 5424 log levels in descending severity order.
-///
-/// Filtering rule: if configured `logLevel = X`, only messages with
-/// `value <= X` are emitted. Higher values produce total silence.
-enum LogLevel {
-  emergency, // 0 — system unusable
-  alert, // 1 — immediate action required
-  critical, // 2 — critical condition
-  error, // 3 — operation error, 5xx
-  warning, // 4 — abnormal condition, 4xx
-  notice, // 5 — normal but significant
-  info, // 6 — normal flow, 2xx/3xx
-  debug; // 7 — detailed diagnostics
+import 'modular_logger.dart';
+import 'log_sink.dart';
 
-  /// RFC 5424 numeric value (0–7).
-  int get value => index;
-}
-
-/// Public logger interface exposed to UseCases.
-///
-/// Each method corresponds to an RFC 5424 severity level.
-/// [fields] is an optional map of structured data attached to the log entry.
-abstract class ModularLogger {
-  void emergency(String msg, {Map<String, dynamic>? fields});
-  void alert(String msg, {Map<String, dynamic>? fields});
-  void critical(String msg, {Map<String, dynamic>? fields});
-  void error(String msg, {Map<String, dynamic>? fields});
-  void warning(String msg, {Map<String, dynamic>? fields});
-  void notice(String msg, {Map<String, dynamic>? fields});
-  void info(String msg, {Map<String, dynamic>? fields});
-  void debug(String msg, {Map<String, dynamic>? fields});
-}
+export 'modular_logger.dart' show LogLevel, ModularLogger;
 
 /// Per-request logger that carries `traceId` and respects `logLevel` filtering.
 ///
@@ -52,7 +23,7 @@ class RequestScopedLogger implements ModularLogger {
     required this.logLevel,
     required this.serviceName,
     StringSink? sink,
-  }) : _sink = sink ?? stdout;
+  }) : _sink = sink ?? defaultLogSink();
 
   // ─── Public API (8 RFC 5424 levels) ─────────────────────────────
 

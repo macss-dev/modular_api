@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - 2026-07-02
+
+### Added
+
+- **Web-safe DTO contract entry-point** — new `@macss/modular-api/dto` subpath
+  export exposing only the runtime-free contract surface (`Input`, `Output`,
+  `Field`, `getFieldMetadata`, `UseCaseException`, `InputValidationError`).
+  Import it from packages shared with browser/front-end code to define and
+  validate DTOs without pulling in the Express server runtime. The `usecase`
+  module already imports the logger as a type-only import, so this surface is
+  Node-global-free at runtime.
+
+### Changed
+
+- `package.json` now declares an `exports` map (`.` for the full barrel, `./dto`
+  for the contract). The full barrel remains server-only.
+
 ## [0.6.0] - 2026-06-13
 
 ### Changed

@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - 2026-07-02
+
+### Added
+
+- **Web-safe DTO contract entry-point** — new `package:modular_api/dto.dart`
+  library exporting only the runtime-free contract surface (`Input`, `Output`,
+  `SchemaField`, `buildSchema`, `validateJsonFields`, `InputValidationException`,
+  `UseCaseException`). Import it from packages shared with web/desktop clients
+  (e.g. a Flutter app's DTO package) to define and validate DTOs without pulling
+  in the server runtime.
+
+### Changed
+
+- **Logger no longer imports `dart:io` directly** — the `ModularLogger`/`LogLevel`
+  contract moved to a pure `modular_logger.dart`, and `RequestScopedLogger`'s
+  default sink is resolved via a conditional import (`stdout` on `dart:io`
+  platforms, a `print`-based sink on web). Importing the full barrel — or the
+  `Input`/`Output` contract — no longer breaks web compilation.
+- Corrected `modularApiPackageVersion` (was stale at `0.4.7`) to track the
+  package version.
+
 ## [0.6.0] - 2026-06-13
 
 ### Changed
