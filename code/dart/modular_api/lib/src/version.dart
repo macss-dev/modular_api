@@ -1,3 +1,3 @@
 library;
 
-const modularApiPackageVersion = '0.4.7';
+const modularApiPackageVersion = '0.6.1';

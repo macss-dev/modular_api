@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - 2026-07-02
+
+### Added
+
+- **`modular_api.dto` contract module** — symmetry counterpart of the Dart
+  `package:modular_api/dto.dart` and TypeScript `@macss/modular-api/dto`
+  entry-points. Re-exports the runtime-free DTO surface (`Input`, `Output`,
+  `UseCaseException`, and pydantic's `Field`) for code that only needs the data
+  contract. Python has no browser target, so this is import hygiene / API
+  symmetry rather than a compilation fix.
+
 ## [0.6.0] - 2026-06-13
 
 ### Changed

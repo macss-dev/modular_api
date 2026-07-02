@@ -1,4 +1,4 @@
-import 'package:modular_api/src/core/logger/logger.dart';
+import 'package:modular_api/src/core/logger/modular_logger.dart';
 import 'package:modular_api/src/core/schema/field.dart';
 
 /// **Contract** — use `implements UseCase<I, O>`.
