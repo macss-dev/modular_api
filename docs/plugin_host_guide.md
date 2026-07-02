@@ -1,11 +1,11 @@
 # Plugin Host Guide
 
 This guide documents the current public plugin-host surface available in Dart,
-TypeScript, and Python as of v0.4.7.
+TypeScript, and Python as of the 0.4.x series.
 
-It is intentionally limited to behavior that exists today. It does not document
-future GraphQL work or later hardening that is still planned but not yet
-implemented.
+It is intentionally limited to behavior that exists today. GraphQL runtime
+support exists as an official optional plugin; later compatibility hardening is
+tracked separately in the roadmap.
 
 ## What Is Public Today
 

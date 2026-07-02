@@ -4,9 +4,9 @@
 
 `modular_api` is a monorepo of official SDKs for building modular HTTP APIs where each endpoint maps to one use case. The core is intentionally small: modules, use cases, DTOs, request lifecycle, HTTP pipeline, request-scoped logging, and a plugin host.
 
-The approved plugin-host direction formalizes `/health`, `/metrics`, `/docs`, `/openapi.json`, and `/openapi.yaml` as official plugins mounted under the shared `basePath`. That mount path defaults to `/`, and every public route for an API instance must respect it uniformly. An API mounted at `/api/v1` therefore exposes `/api/v1/health`, `/api/v1/metrics`, `/api/v1/docs`, `/api/v1/openapi.json`, and `/api/v1/openapi.yaml`. Third-party plugins will use that same public contract.
+The approved plugin-host direction formalizes `/health`, `/metrics`, `/docs`, `/openapi.json`, `/openapi.yaml`, and optional `/graphql` as official plugins mounted under the shared `basePath`. That mount path defaults to `/`, and every public route for an API instance must respect it uniformly. An API mounted at `/api/v1` therefore exposes `/api/v1/health`, `/api/v1/metrics`, `/api/v1/docs`, `/api/v1/openapi.json`, `/api/v1/openapi.yaml`, and, when GraphQL is configured, `/api/v1/graphql`. Third-party plugins use that same public contract.
 
-GraphQL is a future official plugin. When enabled it will provide the query side of an optional CQRS profile. REST-only APIs remain a first-class use case.
+GraphQL is an official optional runtime plugin. When enabled it provides the query side of an optional CQRS profile. REST-only APIs remain a first-class use case.
 
 ---
 
@@ -74,6 +74,7 @@ public host contract.
 | Prometheus metrics | `/{basePath}/metrics` | `MetricsPlugin` |
 | OpenAPI spec | `/{basePath}/openapi.json`, `/{basePath}/openapi.yaml` | `OpenApiPlugin` |
 | Interactive docs | `/{basePath}/docs` | `DocsPlugin` |
+| GraphQL queries | `/{basePath}/graphql` | `GraphqlRuntimePlugin` |
 
 The official plugins already use the same public extension model available to
 third-party plugins and keep those endpoints inside the API namespace.

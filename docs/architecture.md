@@ -17,11 +17,12 @@ framework.
 The core is deliberately small: module registration, use case contracts,
 request lifecycle execution, middleware pipeline, request-scoped logging
 context, and a plugin host. Optional capabilities such as health checks,
-metrics, OpenAPI generation, and interactive docs are modeled as plugins.
+metrics, OpenAPI generation, interactive docs, and optional GraphQL queries are
+modeled as plugins.
 
 This document is the **canonical target architecture** for the current plugin
-refactor. Language-specific packages implement this specification by adapting
-the contracts to their native HTTP framework.
+model. Language-specific packages implement this specification by adapting the
+contracts to their native HTTP framework.
 
 ---
 
@@ -45,8 +46,8 @@ the contracts to their native HTTP framework.
 | **Convention over configuration** | Routing, serialization, error handling, and documentation are derived from the contracts automatically. |
 | **Standards over invention** | Every subsystem adopts an established standard (RFC, IETF draft, Prometheus, OpenAPI). |
 | **Zero dependencies when possible** | Prefer native implementations over third-party libraries. External dependencies are justified only when reimplementation is unreasonably costly. |
-| **Optional capabilities are plugins** | Health, metrics, OpenAPI, docs, and future transports are not part of the core runtime contract. The core provides the host; plugins provide the capability. |
-| **CQRS-ready, but optional** | REST use cases are native to the core. A future GraphQL plugin may provide the query side of CQRS, but REST-only APIs remain a valid first-class use case. |
+| **Optional capabilities are plugins** | Health, metrics, OpenAPI, docs, GraphQL, and future transports are not part of the core runtime contract. The core provides the host; plugins provide the capability. |
+| **CQRS-ready, but optional** | REST use cases are native to the core. The GraphQL plugin may provide the query side of CQRS, but REST-only APIs remain a valid first-class use case. |
 
 ---
 
@@ -306,7 +307,7 @@ Plugin Host
   `/{basePath}/health`, `/{basePath}/metrics`, `/{basePath}/docs`,
   `/{basePath}/openapi.json`, and `/{basePath}/openapi.yaml` are provided by
   plugins.
-- Business transports layered on top of the API, such as a future GraphQL
+- Business transports layered on top of the API, such as the optional GraphQL
   plugin, use that same `/{basePath}` namespace.
 
 ---
@@ -689,12 +690,13 @@ Official plugin endpoints use that same API namespace and follow:
 Full REST method support: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.
 Default method is `POST`.
 
-### 11.2 Future: Optional CQRS Profile
+### 11.2 Optional CQRS Profile
 
-> **Planned for a future version. Not part of the current plugin milestone.**
+> GraphQL runtime support exists as an optional plugin. The CQRS profile remains
+> optional and is active only when that plugin is configured.
 
-If the official GraphQL plugin is enabled, the architecture may evolve toward
-an optional separation between reads and writes:
+If the official GraphQL plugin is enabled, the architecture supports an
+optional separation between reads and writes:
 
 ```mermaid
 flowchart LR
@@ -713,7 +715,7 @@ flowchart LR
 **Key decisions:**
 
 - **Commands** remain REST use case endpoints.
-- **Queries** may be exposed through an official GraphQL plugin.
+- **Queries** may be exposed through the official GraphQL plugin.
 - GraphQL is optional. A REST-only API remains valid.
 - The GraphQL plugin MUST share logging, middleware, and request context with
   the REST pipeline.
