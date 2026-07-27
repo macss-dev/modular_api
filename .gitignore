@@ -1,2 +1,6 @@
 # developer-specific files
 .dev/
+# Inquiry — local workspace & cycle state
+.inquiry/
+cleanrooms/
+docs/requisitions/
