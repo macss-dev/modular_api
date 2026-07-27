@@ -1,9 +1,6 @@
 # modular_api - Product Roadmap
 
-This roadmap is deliberately honest about where the project actually is. The plugin
-infrastructure, the official operational plugins, the GraphQL runtime, and the complementary
-packages are already shipped. The architecture is complete. What remains, up to `1.0.0`, is
-refinement of what already exists — not new foundational capabilities.
+
 
 ---
 
@@ -15,10 +12,11 @@ Every release must be coherent on its own.
 - **Minor** - new capabilities, new public APIs
 - **Patch** - bug fixes, documentation, and performance improvements
 
-**Up to `1.0.0`, every release is a fix or an improvement of the already-implemented
-architecture, not a fundamentally new capability.** The `0.x` line refines, hardens, and
-consolidates the surfaces that already shipped. `1.0.0` is the point at which the ecosystem is
-declared stable for long-term support.
+**Up to `1.0.0`, releases refine, harden, and consolidate the surfaces that already shipped, with
+two deliberate exceptions** — tracing and gRPC, each a **minor** under the rules above (new
+capability, new public API), each justified in an ADR before implementation. `1.0.0` is the point
+at which the ecosystem is declared stable for long-term support. The bar for admitting anything
+else to that list is an ADR that explains why it is foundational rather than convenient.
 
 A consequence worth stating explicitly: some improvements *reduce* surface rather than add it.
 For example, converging the six database packages (`sqlserver` + `postgres` across the three SDKs)
@@ -68,9 +66,27 @@ number for that change; it lands when it is ready, under the same semver rules.
 
 ## The Road to 1.0.0
 
-These are improvements of the existing architecture, not new foundations. They land under semver
-when ready; no version numbers are pre-assigned.
+All of these land under semver when ready; no version numbers are pre-assigned. The first two are
+new capabilities (minor releases, per ADR-0005); the rest are improvements of the existing
+architecture.
 
+- **Distributed tracing in core, speaking OTLP** (ADR-0005). Completes the observability surface
+  alongside logging and metrics. Own contract (`ModularTracer` / `Span`), no OpenTelemetry
+  dependency, OTLP/HTTP with JSON encoding as the wire format, `SpanExporter` as a swappable
+  contract behind a conditional import. Span lifecycle is host-owned and transport-neutral; the
+  official opt-in plugin owns configuration, sampling, batching, export, and shutdown flush.
+  Instrumentation reaches `modular_api_postgres` (around `DbCommand`) and
+  `modular_api_rest_client` (client span plus `traceparent` injection), so the release is
+  coordinated across packages.
+- **gRPC as a third transport**, after tracing. The use-case core already projects to two
+  surfaces — OpenAPI generated from use cases, GraphQL SDL from metadata — and protobuf is a
+  natural third projection of the same model: *one use case, N transports*. Unlike tracing, this
+  one **does** take libraries (`grpc`, `protobuf`, and `protoc` codegen), consistent with the
+  principle that the framework owns contracts and semantics but delegates transports — `shelf`
+  serves HTTP today on exactly those terms. Tracing is designed to accommodate it: a new transport
+  arrives as an adapter over the neutral span lifecycle, not as a refactor. Scope to settle when
+  the ADR is written: whether the gRPC service surface is generated from use-case schemas or
+  declared, and whether streaming is in the first slice.
 - **Converge the database packages** toward a single `modular_api_sql` contracts package per SDK
   (and, later, `modular_api_nosql`), since the per-engine contracts differ only in
   `DbConnectionSettings`. Reduces 15 packages to 12. (ADR-0004)
@@ -96,3 +112,6 @@ These do not change across releases:
 4. `/{basePath}/docs` stays the canonical interactive documentation endpoint.
 5. CQRS is optional and only active when the GraphQL plugin is enabled.
 6. Database packages are contracts-only; the framework ships no driver binding (ADR-0004).
+7. Telemetry emits open formats and nothing vendor-specific: the framework carries no cloud
+   exporter and no cloud credentials. Reaching a backend is the deployment's concern (ADR-0005).
+8. The framework owns contracts and semantics, and delegates transports to libraries.
