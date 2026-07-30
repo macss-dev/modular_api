@@ -1,40 +1,16 @@
-"""SQL Server Stage 1 smoke tests against the shared Docker fixture."""
+"""SQL Server Stage 1 smoke tests against the shared Docker fixture.
+
+Start the fixture with ``docker compose up -d`` in ``code/infra/docker``. The
+connection string, the reachability probe and the ``sqlserver_connection``
+fixture live in ``conftest.py``, so this module **skips** rather than fails when
+the container is not running.
+"""
 
 from __future__ import annotations
-
-import os
-from collections.abc import Iterator
 
 import pytest
 
 pyodbc = pytest.importorskip("pyodbc")
-
-
-def _connection_string() -> str:
-    driver = os.getenv("MODULAR_API_SQLSERVER_DRIVER", "ODBC Driver 17 for SQL Server")
-    host = os.getenv("MODULAR_API_SQLSERVER_HOST", "127.0.0.1")
-    port = os.getenv("MODULAR_API_SQLSERVER_PORT", "14333")
-    database = os.getenv("MODULAR_API_SQLSERVER_DATABASE", "modular_api_graphql_v1")
-    username = os.getenv("MODULAR_API_SQLSERVER_USERNAME", "sa")
-    password = os.getenv("MODULAR_API_SQLSERVER_PASSWORD", "ModularApi_dev_StrongPass1")
-    return (
-        f"DRIVER={{{driver}}};"
-        f"SERVER={host},{port};"
-        f"DATABASE={database};"
-        f"UID={username};"
-        f"PWD={password};"
-        "Encrypt=no;"
-        "TrustServerCertificate=yes;"
-    )
-
-
-@pytest.fixture(scope="module")
-def sqlserver_connection() -> Iterator[pyodbc.Connection]:
-    connection = pyodbc.connect(_connection_string(), timeout=5)
-    try:
-        yield connection
-    finally:
-        connection.close()
 
 
 def test_reads_shared_fixture_objects_and_relation_metadata(sqlserver_connection: pyodbc.Connection) -> None:
