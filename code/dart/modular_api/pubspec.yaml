@@ -12,6 +12,11 @@ environment:
   
 dependencies:
   crypto: ^3.0.6
+  # OpenTelemetry API only — never the SDK, an exporter, grpc or protobuf.
+  # The API is no-op without an SDK, so tracing costs nothing until the
+  # application supplies a TracerProvider. See ADR-0005 (amended) A1/A2, and
+  # test/tracing/dependency_boundary_test.dart, which enforces this.
+  dartastic_opentelemetry_api: ^0.9.1
   gql: ^1.0.1
   json5: ^0.8.2
   leto: 0.0.1-dev.2
