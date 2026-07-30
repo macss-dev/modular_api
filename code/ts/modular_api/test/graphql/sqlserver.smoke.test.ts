@@ -1,49 +1,30 @@
-import { createRequire } from 'node:module';
-
+/**
+ * SQL Server Stage 1 smoke tests against the shared Docker fixture.
+ *
+ * Skips rather than fails when the fixture is unavailable — see
+ * `sqlserverFixture.ts` for the gate and how to start the container.
+ */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-type SqlRequestLike = {
-  query<Row extends object>(query: string): Promise<{ recordset: Row[] }>;
-};
+import {
+  loadSqlModule,
+  sqlServerAvailable,
+  sqlServerConfig,
+  sqlServerUnavailableReason,
+  type SqlConnectionPoolLike,
+} from './sqlserverFixture';
 
-type SqlConnectionPoolLike = {
-  close(): Promise<void>;
-  request(): SqlRequestLike;
-};
+const describeWithSqlServer = sqlServerAvailable ? describe : describe.skip;
 
-type SqlModuleLike = {
-  connect(config: object): Promise<SqlConnectionPoolLike>;
-};
+if (!sqlServerAvailable) {
+  console.info(`[sqlserver smoke] skipped: ${sqlServerUnavailableReason}`);
+}
 
-const require = createRequire(import.meta.url);
-const hasSqlDriver = (() => {
-  try {
-    require.resolve('mssql');
-    return true;
-  } catch {
-    return false;
-  }
-})();
-const describeWithDriver = hasSqlDriver ? describe : describe.skip;
-
-const sqlServerConfig = {
-  user: process.env.MODULAR_API_SQLSERVER_USERNAME ?? 'sa',
-  password: process.env.MODULAR_API_SQLSERVER_PASSWORD ?? 'ModularApi_dev_StrongPass1',
-  server: process.env.MODULAR_API_SQLSERVER_HOST ?? '127.0.0.1',
-  port: Number.parseInt(process.env.MODULAR_API_SQLSERVER_PORT ?? '14333', 10),
-  database: process.env.MODULAR_API_SQLSERVER_DATABASE ?? 'modular_api_graphql_v1',
-  options: {
-    encrypt: false,
-    trustServerCertificate: true,
-  },
-};
-
-describeWithDriver('SQL Server Stage 1 smoke', () => {
+describeWithSqlServer('SQL Server Stage 1 smoke', () => {
   let pool: SqlConnectionPoolLike;
 
   beforeAll(async () => {
-    const sql = require('mssql') as SqlModuleLike;
-    pool = await sql.connect(sqlServerConfig);
+    pool = await loadSqlModule().connect(sqlServerConfig);
   });
 
   afterAll(async () => {
