@@ -4,7 +4,9 @@ Date: 2026-07-25
 
 ## Status
 
-Accepted
+Accepted — **amended 2026-07-30**. Decisions 2, 3 and 9 below are superseded by A1–A6 in the
+Amendment section; decisions 1, 4, 5, 6, 7, 8 and 10 stand. The superseded text is preserved
+deliberately: the reasoning that led to a reversal is part of the record.
 
 ## Context
 
@@ -75,7 +77,8 @@ by hand with no client library. It therefore falls on the owned side of the line
    shipped in core, activated by configuration. Invariant 3 is preserved — a REST-only API stays
    valid with tracing disabled.
 
-2. **The framework does not depend on any OpenTelemetry library.** Core defines its own
+2. **[SUPERSEDED 2026-07-30 — see A1/A2]** **The framework does not depend on any OpenTelemetry
+   library.** Core defines its own
    `ModularTracer` / `Span` contract, mirroring how `ModularLogger` is a core contract with a
    swappable sink. This survives a package rename if the Dart donation completes, keeps core
    minimal (invariant 1), and adds zero dependencies — a strictly lower bar than the GraphQL
@@ -83,7 +86,8 @@ by hand with no client library. It therefore falls on the owned side of the line
    instrumentation; it is small, because every instrumentation point (request, plugin slots,
    `DbCommand`, `rest_client`) is inside this ecosystem.
 
-3. **OTLP/HTTP with JSON encoding is the wire format. No protobuf, no gRPC client.** The
+3. **[SUPERSEDED 2026-07-30 — see A3]** **OTLP/HTTP with JSON encoding is the wire format. No
+   protobuf, no gRPC client.** The
    framework never talks to a vendor API and never carries cloud credentials. Reaching Cloud
    Trace, Jaeger or Tempo is the deployment's problem, solved by a Collector — an infrastructure
    artifact, not a dependency. This is ADR-0004's stance applied to telemetry: own the contract,
@@ -127,7 +131,9 @@ by hand with no client library. It therefore falls on the owned side of the line
    data, not code — which is precisely why the owned surface (OTLP wire format, W3C Trace Context)
    is the stable part.
 
-9. **Validation strategy is part of this decision.** Development is test-first, in this order:
+9. **[SUPERSEDED 2026-07-30 — see A4; the test-first method and the production gate survive, the
+   hand-rolled OTLP goldens and three-implementation parity do not]** **Validation strategy is part
+   of this decision.** Development is test-first, in this order:
    propagation and id generation → span model and contract → OTLP serializer → processor and
    batching → host wiring → plugin configuration and export → Collector integration →
    `modular_api_postgres` and `modular_api_rest_client` instrumentation → production.
@@ -158,13 +164,81 @@ by hand with no client library. It therefore falls on the owned side of the line
     "first slice" phrasing: a roadmap that no longer describes the project is worse than one that
     admits a change of direction.
 
+## Amendment — 2026-07-30: depend on the OpenTelemetry API, own only the instrumentation
+
+Decisions 2, 3 and 9 above are **superseded**. Decisions 1, 4, 5, 6, 7, 8 and 10 stand unchanged.
+The original text is kept rather than rewritten, because the reasoning that led here is the point of
+an ADR.
+
+**What changed:** the maturity assessment in Q1 was wrong, and it was the load-bearing premise of
+decision 2. Measured on pub.dev on 2026-07-30:
+
+| Package | Version | Last published | Pub points | Downloads |
+|---|---|---|---|---|
+| `opentelemetry` (Workiva) | 0.18.11 | 4 months ago | 145 | 93.8k |
+| `dartastic_opentelemetry` (SDK) | 0.9.7, `1.1.0-beta.12` | 7 days ago | 155 | 61.3k |
+| `dartastic_opentelemetry_api` | 0.9.1, `1.0.0-rc.1` | 9 days ago | 160 | 63.7k |
+
+Workiva's package marks traces *beta, production-ready*. Dartastic publishes weekly, is at release
+candidate, and — decisively — **`dartastic_opentelemetry_api` supports Web**, which was the strongest
+technical objection to depending on it. It carries four dependencies (`collection`, `fixnum`, `meta`,
+`web`), all stable and unremarkable.
+
+A second argument, independent of maturity, proved stronger than the symmetry argument in decision 9:
+**three hand-rolled implementations that agree prove consistency, not correctness.** Same author, same
+possible misreading of the specification, three times, validating itself. Whereas an official SDK in
+TypeScript plus an official SDK in Python plus a hand-rolled Dart implementation, compared against
+one another, makes the two official ones an **oracle** for the third. That is stronger validation and
+less work. Once the oracle argument is accepted for TS and Python, the case for hand-rolling Dart
+collapses too: the SDK exists, it is web-safe, and it is on its way to becoming official.
+
+**Amended decisions:**
+
+- **A1 — Core depends on `dartastic_opentelemetry_api`, and on nothing else from OpenTelemetry.** The
+  API package is the layer the specification designed for exactly this: it is no-op when no SDK is
+  installed, so a consumer who never enables tracing pays nothing. The framework instruments against
+  the API.
+- **A2 — Core never depends on an OpenTelemetry SDK or exporter.** The application supplies a
+  configured `TracerProvider` through `TracingOptions`; `dartastic_opentelemetry`, `grpc` and
+  `protobuf` live in the application's dependency tree, never in the framework's. This is ADR-0004's
+  shape exactly — the framework ships the contract, the consumer supplies the adapter — and it keeps
+  core web-safe. The dependency guard test is not deleted, it is **inverted**: assert the API is
+  present and the SDK, `grpc` and `protobuf` are absent.
+- **A3 — The framework no longer owns the wire format.** No OTLP serializer, no span model, no id
+  generation, no sampler, no span processor, no exporter. The SDK provides all of it, including
+  OTLP/gRPC and OTLP/HTTP-protobuf exporters. The OTLP/JSON reasoning in decision 3 is moot: the
+  application picks an exporter, and HTTP+protobuf is a `MUST` for receivers, so the Collector
+  requirement that JSON would have imposed disappears. What survives from decision 3 is the
+  principle, not the mechanism: the framework carries no vendor exporter and no cloud credentials.
+- **A4 — TypeScript and Python bind to their official OpenTelemetry SDKs.** Hand-rolling in three
+  languages is abandoned. Parity (G6) is redefined: it compares **the spans our instrumentation
+  produces** — names, kinds, attributes, hierarchy — not a wire payload we serialize. Spec-derived
+  OTLP goldens (G2) are dropped along with the serializer.
+- **A5 — What remains genuinely ours** is the part no library can provide: the propagation
+  *precedence policy*, a `X-Cloud-Trace-Context` propagator (verified absent from dartastic), the
+  instrumentation points (server span, per-middleware spans, `DbCommand`, `rest_client`), the plugin
+  lifecycle, and log↔trace correlation. This is a materially smaller surface than the original plan.
+- **A6 — Pre-1.0 dependency risk is accepted and mitigated by participation.** `dartastic_opentelemetry_api`
+  is at `1.0.0-rc.1` and under donation review; if it becomes an official OpenTelemetry artifact it
+  will likely be renamed, forcing one migration. We accept that, pin a version range, and
+  **contribute upstream** — the project published a call for contributors, and three gaps we need are
+  already identified as contribution candidates: a Google Cloud propagator, server-side
+  instrumentation for shelf, and an in-memory span exporter for tests. Having a voice in a
+  specification we consume is worth more than the insulation an in-house contract would buy.
+
+**What this costs, stated plainly:** invariant 1 ("the core stays minimal") absorbs one direct and
+four transitive dependencies where the original plan added none. That is the price of correctness by
+oracle instead of correctness by self-agreement, and of not maintaining a specification
+implementation across three languages for years.
+
 ## Rejected alternatives
 
-- **Depend on `dartastic_opentelemetry_api` in core.** A reasonable option, and the closest call
-  here — the API package is small and no-op by default. Rejected on rename risk while the donation
-  is under review, and because the equivalent contract already exists in-house for logging and
-  metrics. Revisit if and when the Dart API becomes an official OpenTelemetry artifact; decision 2
-  is a contract boundary, so binding it to an external API later is additive.
+- **Depend on `dartastic_opentelemetry_api` in core.** Originally rejected on rename risk and on the
+  existence of in-house contracts for logging and metrics. **This rejection was reversed on
+  2026-07-30 — see the Amendment above.** The stated reason to revisit ("if and when the Dart API
+  becomes an official OpenTelemetry artifact") turned out to be the wrong trigger: what mattered was
+  that the package is already web-safe and at release candidate, and that hand-rolling in three
+  languages produces self-validating rather than validated code.
 - **A separate `modular_api_otel_sdk` package.** Rejected per Q4: official plugins are not
   separate packages, ADR-0002 would triple the cost, and the name would promise a general-purpose
   Dart OTel SDK — an implicit commitment to specification completeness we do not intend to carry.
@@ -178,24 +252,29 @@ by hand with no client library. It therefore falls on the owned side of the line
 
 ## Consequences
 
-- **Traces join logs and metrics**, completing the observability surface with a contract the
-  framework owns end to end and zero new dependencies in any SDK.
+> The consequences below are stated as amended. Where the original decisions 2, 3 or 9 shaped them,
+> the text reflects A1–A6, not the superseded version.
+
+- **Traces join logs and metrics**, completing the observability surface. Core takes one new
+  dependency — the OpenTelemetry **API** — and never an SDK or exporter (A1, A2).
 - **A coordinated multi-package release.** The contract lives in core, but instrumentation touches
   `modular_api_postgres` (span around `DbCommand` execution) and `modular_api_rest_client`
   (client span plus `traceparent` injection). Because the database packages are contracts-only
   (ADR-0004), instrumenting the contract means every adapter is instrumented for free — a direct
   dividend of that decision.
-- **Three SDKs, three implementations** (ADR-0002), with the OTLP payload as the parity artifact.
-  The hardest SDK is Dart, which is also the one the first consumer runs.
+- **Three SDKs, three bindings to official APIs** (A4). Parity compares the spans our
+  instrumentation produces, not a wire payload (G6 as redefined).
 - **The deployment owns the destination.** For `socia`, that means a Collector sidecar on Cloud
   Run, in `code/infra`, alongside the existing Prometheus/GMP wiring. Two prerequisites will
   silently invalidate the final gate if missed: **Trace storage is currently disabled in the
   `sociacacsi` project**, and the first deployment should sample at 100% — the daily burst is the
   event to capture, and partial sampling would likely miss it.
 - **The home-grown `trace_id` is superseded, not removed.** `X-Request-ID` remains the last
-  fallback, so existing consumers and log queries keep working.
-- **A maintenance liability is accepted knowingly.** Owning a wire format across three SDKs for
-  years is a real cost. It is bounded because the owned surface — OTLP encoding and W3C Trace
-  Context — is stable and versioned, while the churning part (semantic conventions) is data.
+  propagation fallback and its original value is preserved as a separate log field, but the
+  `trace_id` field itself changes shape to the 32-hex W3C id. That is a log-format change, and the
+  runbook treats it as the highest-blast-radius item in the work.
+- **A maintenance liability is accepted knowingly, and it is a different one than first planned.**
+  Not a wire format across three languages, but a pre-1.0 dependency under donation review that will
+  probably be renamed once (A6). Mitigated by a pinned range and by contributing upstream.
 - **gRPC now has a design constraint to satisfy, not a dependency to wait for**: decision 5 means
   the transport arrives as an adapter.
