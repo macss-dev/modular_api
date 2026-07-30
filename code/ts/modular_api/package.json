@@ -46,6 +46,7 @@
   },
   "homepage": "https://github.com/ccisnedev/modular_api/tree/main/code/ts/modular_api#readme",
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
     "express": "^4.22.1",
     "graphql": "^16.11.0",
     "json5": "^2.2.3"
