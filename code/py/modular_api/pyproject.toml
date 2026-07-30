@@ -26,6 +26,11 @@ classifiers = [
 dependencies = [
     "starlette>=0.40",
     "pydantic>=2.0",
+    # OpenTelemetry API only — never the SDK, an exporter, grpcio or protobuf.
+    # The API is no-op without an SDK, so tracing costs nothing until the
+    # application configures a TracerProvider. See ADR-0005 (amended) A1/A2, and
+    # tests/tracing/test_dependency_boundary.py, which enforces this.
+    "opentelemetry-api>=1.44,<2",
 ]
 
 [project.optional-dependencies]
