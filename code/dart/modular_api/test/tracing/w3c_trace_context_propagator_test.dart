@@ -60,14 +60,19 @@ void main() {
     });
 
     group('carries tracestate', () {
-      test('verbatim, without interpreting it', () {
+      test('verbatim, preserving order', () {
         // D4: we are not a tracing vendor, so we add no entry of our own and we
         // must not normalise, reorder or drop what another vendor set.
+        //
+        // Asserting the exact round-trip rather than mere presence, because W3C
+        // makes tracestate ordering significant — the leftmost entry is the most
+        // recently updated system. A `contains` check would pass even if the
+        // order were scrambled, which is how this test was first written and what
+        // writing the TypeScript mirror exposed.
         const raw = 'rojo=00f067aa0ba902b7,congo=t61rcWkgMzE';
         final spanContext = _extractWith(sampled, tracestate: raw).spanContext;
 
-        expect(spanContext!.traceState?.toString(), contains('rojo'));
-        expect(spanContext.traceState?.toString(), contains('congo'));
+        expect(spanContext!.traceState?.toString(), equals(raw));
       });
 
       test('tolerating its absence', () {
