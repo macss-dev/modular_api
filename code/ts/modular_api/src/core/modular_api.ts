@@ -10,6 +10,8 @@ import type { HealthCheck } from './health/health_check';
 import { HealthService } from './health/health_service';
 import { MetricRegistry, MetricsRegistrar } from './metrics/metric_registry';
 import { loggingMiddleware } from './logger/logging_middleware';
+import { tracingMiddleware } from './tracing/tracingMiddleware';
+import { TracingOptions } from './tracing/tracingOptions';
 import { LogLevel } from './logger/logger';
 import { bodyParserErrorHandler } from './body_parser_error_handler';
 import { unhandledRequestErrorHandler } from './unhandled_request_error_handler';
@@ -41,6 +43,13 @@ export interface ModularApiOptions {
    * Default: LogLevel.info (emits emergency..info, suppresses debug).
    */
   logLevel?: LogLevel;
+
+  /**
+   * Opt-in distributed tracing. Absent means off and costs nothing: no tracing
+   * middleware is installed and no span is ever created. The application supplies
+   * the tracer provider; the framework depends on `@opentelemetry/api` only.
+   */
+  tracing?: TracingOptions;
   /**
    * OpenAPI `servers` list. Each entry has a `url` and optional `description`.
    * When omitted, `serve()` generates `[{url: 'http://localhost:{port}'}]`.
@@ -94,6 +103,9 @@ export class ModularApi {
   // Logging
   private readonly logLevel: LogLevel;
 
+  /** Distributed tracing options, or undefined when tracing is off (ADR-0005). */
+  private readonly tracing?: TracingOptions;
+
   // OpenAPI
   private readonly servers?: Array<{ url: string; description?: string }>;
   private readonly graphql?: GraphqlOptions;
@@ -120,6 +132,7 @@ export class ModularApi {
 
     // Logging
     this.logLevel = options.logLevel ?? LogLevel.info;
+    this.tracing = options.tracing;
 
     // OpenAPI servers
     this.servers = options.servers;
@@ -301,6 +314,23 @@ export class ModularApi {
           excludedRoutes: excludedLogRoutes,
         }),
       );
+
+      // Tracing immediately after logging and therefore BEFORE every plugin
+      // middleware. A span created from inside a plugin slot would miss the plugin
+      // middleware registered before it, leaving a hole in the waterfall exactly
+      // where cold start and early middleware live (ADR-0005 decision 4, runbook
+      // D12). Absent options install nothing, which is what makes tracing free when
+      // it is off (gate G3).
+      const tracing = this.tracing;
+      if (tracing !== undefined) {
+        this.app.use(
+          tracingMiddleware({
+            tracer: tracing.tracer,
+            policy: tracing.policy,
+            excludedRoutes: excludedLogRoutes,
+          }),
+        );
+      }
 
       // Body parsing AFTER loggingMiddleware — SyntaxErrors now have trace_id.
       this.app.use(express.json());
