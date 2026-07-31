@@ -10,8 +10,16 @@ from modular_api.core.tracing.cloud_trace_propagator import (
     CLOUD_TRACE_CONTEXT_HEADER,
     CloudTraceContextPropagator,
 )
+from modular_api.core.tracing.propagation_policy import (
+    REQUEST_ID_HEADER,
+    PropagationPolicy,
+    PropagationResult,
+)
 
 __all__ = [
     "CLOUD_TRACE_CONTEXT_HEADER",
+    "REQUEST_ID_HEADER",
     "CloudTraceContextPropagator",
+    "PropagationPolicy",
+    "PropagationResult",
 ]
