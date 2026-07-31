@@ -15,11 +15,21 @@ from modular_api.core.tracing.propagation_policy import (
     PropagationPolicy,
     PropagationResult,
 )
+from modular_api.core.tracing.tracing_middleware import (
+    PROPAGATION_RESULT_SCOPE_KEY,
+    TRACING_SPAN_SCOPE_KEY,
+    tracing_middleware,
+)
+from modular_api.core.tracing.tracing_options import TracingOptions
 
 __all__ = [
     "CLOUD_TRACE_CONTEXT_HEADER",
     "REQUEST_ID_HEADER",
+    "PROPAGATION_RESULT_SCOPE_KEY",
+    "TRACING_SPAN_SCOPE_KEY",
     "CloudTraceContextPropagator",
     "PropagationPolicy",
     "PropagationResult",
+    "TracingOptions",
+    "tracing_middleware",
 ]

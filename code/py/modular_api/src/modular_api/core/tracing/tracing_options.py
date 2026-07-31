@@ -1,0 +1,63 @@
+"""Turns tracing on and says how.
+
+**Absent means off, and off is free.** Without this, no tracing middleware is
+installed, no span is ever created, and the log format is unchanged. A REST-only API
+that never asks for tracing behaves exactly as it did before (ADR-0005 invariant 3,
+gate G3).
+
+**The application supplies the tracer, not the framework** (ADR-0005 A2). Core depends
+on ``opentelemetry-api``; the SDK, its exporters and any credentials belong to the
+application, which builds a provider and passes it here.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+
+from opentelemetry.propagators.textmap import TextMapPropagator
+from opentelemetry.trace import Tracer, TracerProvider
+
+from modular_api.core.tracing.propagation_policy import PropagationPolicy
+
+
+@dataclass(frozen=True)
+class TracingOptions:
+    """Distributed tracing configuration."""
+
+    #: The application's tracer provider, from its OpenTelemetry SDK.
+    tracer_provider: TracerProvider
+
+    #: The ordered propagator chain. ``None`` means W3C Trace Context alone.
+    #:
+    #: A service on Google Cloud appends a Cloud Trace propagator, which is how
+    #: vendor-specific formats stay out of the framework (runbook D24, roadmap
+    #: invariant 7).
+    propagators: Sequence[TextMapPropagator] | None = None
+
+    #: Whether an incoming trace context is honoured at all.
+    #:
+    #: Defaults to ``True``, matching every official OpenTelemetry SDK. **Set it to
+    #: ``False`` on a service that receives internet traffic directly**, where a caller
+    #: could otherwise choose its own trace ids and collide traces (runbook D25).
+    trust_incoming_trace_context: bool = True
+
+    #: The instrumentation scope name reported to the backend.
+    instrumentation_name: str = "modular_api"
+
+    @property
+    def policy(self) -> PropagationPolicy:
+        """The propagation policy these options describe."""
+        if self.propagators is None:
+            return PropagationPolicy(
+                trust_incoming_trace_context=self.trust_incoming_trace_context
+            )
+        return PropagationPolicy(
+            propagators=self.propagators,
+            trust_incoming_trace_context=self.trust_incoming_trace_context,
+        )
+
+    @property
+    def tracer(self) -> Tracer:
+        """The tracer the host instruments with."""
+        return self.tracer_provider.get_tracer(self.instrumentation_name)
