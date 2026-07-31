@@ -7,5 +7,6 @@
     "declarationMap": false,
     "sourceMap": false
   },
-  "exclude": ["node_modules", "dist", "example", "**/*.test.ts"]
+  "//": "`test` is excluded as a directory, not by filename. Excluding only **/*.test.ts left any test helper that did not follow that convention to be compiled as a source file, which violates rootDir: ./src and fails the build -- silently, because vitest does not typecheck. A build never needs tests.",
+  "exclude": ["node_modules", "dist", "example", "test"]
 }
