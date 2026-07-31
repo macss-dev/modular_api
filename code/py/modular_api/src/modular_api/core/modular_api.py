@@ -33,6 +33,8 @@ from modular_api.core.error_response_middleware import error_response_middleware
 from modular_api.core.health.health_service import HealthService
 from modular_api.core.logger.logger import LogLevel
 from modular_api.core.logger.logging_middleware import logging_middleware
+from modular_api.core.tracing.tracing_middleware import tracing_middleware
+from modular_api.core.tracing.tracing_options import TracingOptions
 from modular_api.core.metrics.metric import Counter, Gauge, Histogram
 from modular_api.core.metrics.metric_registry import MetricRegistry, MetricsRegistrar
 from modular_api.core.module_builder import ModuleBuilder
@@ -61,6 +63,7 @@ class ModularApi:
         metrics_path: str = "/metrics",
         log_level: LogLevel = LogLevel.info,
         graphql: GraphqlOptions | None = None,
+        tracing: TracingOptions | None = None,
     ) -> None:
         self._base_path = base_path
         self._title = title
@@ -71,6 +74,8 @@ class ModularApi:
         self._metrics_path = metrics_path
         self._log_level = log_level
         self._graphql = graphql
+        # Distributed tracing options, or None when tracing is off (ADR-0005).
+        self._tracing = tracing
 
         self._health_service = HealthService(version=version, release_id=self._release_id)
         self._module_routers: list[tuple[str, Router]] = []
@@ -236,6 +241,22 @@ class ModularApi:
         # 4b. Error normalization middleware (wraps plugin middleware + routes)
         app.add_middleware(error_response_middleware())
 
+        # 4c. Tracing — added AFTER error normalization and BEFORE logging, so in
+        # Starlette's LIFO ordering it ends up immediately INSIDE the logger and
+        # outside every plugin middleware. A span created from inside a plugin slot
+        # would miss the plugin middleware registered before it, leaving a hole in the
+        # waterfall exactly where cold start and early middleware live (ADR-0005
+        # decision 4, runbook D12). Absent options add nothing, which is what makes
+        # tracing free when it is off (gate G3).
+        if self._tracing is not None:
+            app.add_middleware(
+                tracing_middleware(
+                    tracer=self._tracing.tracer,
+                    policy=self._tracing.policy,
+                    excluded_routes=_tracing_excluded_routes(operational_paths),
+                ),
+            )
+
         # 5. Logging middleware (outermost — wraps everything)
         excluded_log_routes = [
             operational_paths.health_path,
@@ -279,3 +300,22 @@ class ModularApi:
         if not path:
             return ""
         return path if path.startswith("/") else f"/{path}"
+
+
+def _tracing_excluded_routes(operational_paths: object) -> tuple[str, ...]:
+    """Operational routes kept out of the trace store.
+
+    Derived from ``operational_paths`` rather than hardcoded, so it cannot drift apart
+    from the logger's own exclusions — health, docs, openapi and metrics are noise in a
+    trace store.
+    """
+    paths = [
+        operational_paths.health_path,  # type: ignore[attr-defined]
+        operational_paths.docs_path,  # type: ignore[attr-defined]
+        operational_paths.openapi_json_path,  # type: ignore[attr-defined]
+        operational_paths.openapi_yaml_path,  # type: ignore[attr-defined]
+    ]
+    metrics_path = operational_paths.metrics_path  # type: ignore[attr-defined]
+    if metrics_path is not None:
+        paths.append(metrics_path)
+    return tuple(paths)
