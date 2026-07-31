@@ -48,24 +48,26 @@ depending on an SDK. Everything in ADR-0005's amendment rests on that boundary.
 
 ---
 
-## 2. In-memory span exporter for tests
+## 2. ~~In-memory span exporter for tests~~ — WITHDRAWN, the gap does not exist
 
 | | |
 |---|---|
-| **Target** | [`dartastic_opentelemetry`](https://pub.dev/packages/dartastic_opentelemetry) |
-| **Status** | `identified` (2026-07-30) |
-| **Confidence** | High |
-| **Blocked on** | Nothing, but sequenced after #1 — one ask at a time reads better than a list. |
+| **Status** | **`abandoned` (2026-07-30)** — the SDK already ships this |
+| **Why it is here** | As a record of how a false gap got recorded, which is worth more than deleting it |
 
-**How we found it.** Every stage of the tracing work asserts on captured spans (runbook G2). No
-in-memory span exporter is documented in the Dart SDK, so we wrote one (runbook Stage 4).
+**The claim was wrong.** `dartastic_opentelemetry` exposes `lib/testing.dart` containing
+`InMemorySpanExporter` (with `findSpanByName`, `findSpansByName`, `findSpansStartingWith`, `clear`),
+`InMemoryLogExporter`, `InMemoryMetricExporter`, `OnDemandMetricReader`, a `TestHarness` that bundles
+them, and an idempotent `maybeInitializeOtelForTest()` built for `setUpAll`. It is deliberately kept
+out of the main barrel so production bundles do not carry it.
 
-**Why it belongs there.** Both official SDKs we bind to in the other two languages already ship one —
-`@opentelemetry/sdk-trace-base` in TypeScript and `opentelemetry-sdk` in Python (runbook D22). The
-precedent is unarguable, the surface is small, and it unblocks every downstream library that wants to
-test its own instrumentation.
+**How it happened.** The gap was recorded from the pub.dev *documentation page*, which does not
+describe the harness, rather than from the installed package. Every other entry here was verified
+against source, and every other entry held.
 
----
+**The rule this adds to the file:** verify a gap against the artifact, never against its description.
+Applied retroactively to entry #4 the same day — grepping the package confirmed it declares no `shelf`
+dependency and ships no server instrumentation, so that gap is real.
 
 ## 3. Google Cloud `X-Cloud-Trace-Context` propagator for Dart
 

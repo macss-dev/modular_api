@@ -26,6 +26,14 @@ dependencies:
   shelf_router: ^1.1.4
 
 dev_dependencies:
+  # The OpenTelemetry SDK is a TEST-ONLY dependency and must never move to
+  # `dependencies`. A2 forbids the framework shipping an SDK to consumers; it does
+  # not forbid testing against one, and there is no alternative: with only the API
+  # installed, spans are no-ops that record nothing, so instrumentation cannot be
+  # observed without a real TracerProvider. See runbook D22, and
+  # test/tracing/dependency_boundary_test.dart, which asserts the boundary this
+  # entry sits on the safe side of.
+  dartastic_opentelemetry: ^0.9.7
   http: ^1.6.0
   lints: ^5.0.0
   test: ^1.28.0
