@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from opentelemetry.propagators.textmap import TextMapPropagator
 from opentelemetry.trace import Tracer, TracerProvider
 
+from modular_api.core.logger.logger import TraceFieldFormatter
 from modular_api.core.tracing.propagation_policy import PropagationPolicy
 
 
@@ -44,6 +45,13 @@ class TracingOptions:
 
     #: The instrumentation scope name reported to the backend.
     instrumentation_name: str = "modular_api"
+
+    #: Builds platform-specific log correlation fields, or ``None`` for none.
+    #:
+    #: The framework emits open formats and nothing vendor-specific (roadmap invariant 7),
+    #: so a field like Google's ``logging.googleapis.com/trace`` — which needs a project id
+    #: the framework has no business knowing — is produced here by the application.
+    trace_field_formatter: TraceFieldFormatter | None = None
 
     @property
     def policy(self) -> PropagationPolicy:
