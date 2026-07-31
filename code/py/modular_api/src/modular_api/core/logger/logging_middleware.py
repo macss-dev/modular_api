@@ -17,13 +17,15 @@ from __future__ import annotations
 
 import time
 import uuid
+
+from opentelemetry import trace
 from typing import Callable
 
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from modular_api.core.logger.logger import LogLevel, RequestScopedLogger, WriteFn, _default_write
+from modular_api.core.logger.logger import TraceFieldFormatter, LogLevel, RequestScopedLogger, WriteFn, _default_write
 from modular_api.core.request_pipeline_audit import ensure_request_pipeline_audit
 
 # Key used in request.state to propagate the logger downstream.
@@ -36,6 +38,7 @@ def logging_middleware(
     service_name: str,
     excluded_routes: list[str] | None = None,
     write_fn: WriteFn | None = None,
+    trace_field_formatter: TraceFieldFormatter | None = None,
 ) -> type:
     """Returns a Starlette middleware class (not an instance).
 
@@ -67,9 +70,31 @@ def logging_middleware(
                 await self.app(scope, receive, send)
                 return
 
-            # 1. Resolve trace_id
+            # 1. Resolve the ids from the ambient span.
+            #
+            # The tracing middleware is outermost (D12 as reversed), so when tracing is
+            # configured a recording span is already active here — and contextvars keep it
+            # active for `request completed` too. Both lines therefore carry the same ids
+            # with nothing mutated afterwards.
+            #
+            # With no recording span this is byte-for-byte the behaviour it always had: the
+            # caller's X-Request-ID or a fresh UUID. D5b's compatibility guarantee is
+            # structural rather than conditional — there is no tracing flag to consult,
+            # only whether a span exists.
+            active_span_context = trace.get_current_span().get_span_context()
+            tracing_active = active_span_context.is_valid
+
             header_value = request.headers.get("x-request-id", "")
-            trace_id = header_value if header_value else str(uuid.uuid4())
+            caller_request_id = header_value if header_value else None
+
+            if tracing_active:
+                trace_id = f"{active_span_context.trace_id:032x}"
+                span_id: str | None = f"{active_span_context.span_id:016x}"
+                request_id = caller_request_id
+            else:
+                trace_id = caller_request_id or str(uuid.uuid4())
+                span_id = None
+                request_id = None
 
             # 2. Create per-request logger
             logger = RequestScopedLogger(
@@ -77,6 +102,9 @@ def logging_middleware(
                 log_level=log_level,
                 service_name=service_name,
                 write_fn=write_fn or _default_write,
+                span_id=span_id,
+                request_id=request_id,
+                trace_field_formatter=trace_field_formatter,
             )
 
             method = request.method.upper()

@@ -241,23 +241,7 @@ class ModularApi:
         # 4b. Error normalization middleware (wraps plugin middleware + routes)
         app.add_middleware(error_response_middleware())
 
-        # 4c. Tracing — added AFTER error normalization and BEFORE logging, so in
-        # Starlette's LIFO ordering it ends up immediately INSIDE the logger and
-        # outside every plugin middleware. A span created from inside a plugin slot
-        # would miss the plugin middleware registered before it, leaving a hole in the
-        # waterfall exactly where cold start and early middleware live (ADR-0005
-        # decision 4, runbook D12). Absent options add nothing, which is what makes
-        # tracing free when it is off (gate G3).
-        if self._tracing is not None:
-            app.add_middleware(
-                tracing_middleware(
-                    tracer=self._tracing.tracer,
-                    policy=self._tracing.policy,
-                    excluded_routes=_tracing_excluded_routes(operational_paths),
-                ),
-            )
-
-        # 5. Logging middleware (outermost — wraps everything)
+        # 5. Logging middleware (inside tracing — see step 6 below)
         excluded_log_routes = [
             operational_paths.health_path,
             operational_paths.docs_path,
@@ -271,8 +255,31 @@ class ModularApi:
                 log_level=self._log_level,
                 service_name=self._title,
                 excluded_routes=excluded_log_routes,
+                trace_field_formatter=(
+                    self._tracing.trace_field_formatter if self._tracing else None
+                ),
             ),
         )
+
+        # 6. Tracing — added LAST, so Starlette's LIFO ordering makes it the OUTERMOST
+        # middleware with logging inside it (runbook D12 as reversed). The logger then
+        # runs within the span's active scope and reads trace_id and span_id from the
+        # ambient span on every line, including `request completed`, because contextvars
+        # keep the span active there.
+        #
+        # An earlier design had tracing inside logging, which forced the logger to own the
+        # trace id and the span to adopt it — expressible in Dart but not in TypeScript
+        # without seeding a parent, where the seeded trace flags made the sampler drop the
+        # span. Absent options add nothing, which is what makes tracing free when it is off
+        # (gate G3).
+        if self._tracing is not None:
+            app.add_middleware(
+                tracing_middleware(
+                    tracer=self._tracing.tracer,
+                    policy=self._tracing.policy,
+                    excluded_routes=_tracing_excluded_routes(operational_paths),
+                ),
+            )
 
         return app
 
