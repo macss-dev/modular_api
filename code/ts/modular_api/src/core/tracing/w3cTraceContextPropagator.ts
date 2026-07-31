@@ -16,11 +16,21 @@ export const TRACEPARENT_HEADER = 'traceparent';
 /** The W3C `tracestate` carrier key. */
 export const TRACESTATE_HEADER = 'tracestate';
 
-/** The only version defined by the W3C Trace Context recommendation. */
+/** The only version currently defined by the W3C Trace Context recommendation. */
 const SUPPORTED_VERSION = '00';
 
-/** `00-<32 hex>-<16 hex>-<2 hex>` — lowercase only, every field fixed-width. */
-const TRACEPARENT_PATTERN = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/;
+/** Reserved by the specification and never valid. */
+const FORBIDDEN_VERSION = 'ff';
+
+/**
+ * The 55 characters every version must begin with:
+ * `<version>-<32 hex>-<16 hex>-<2 hex>`, lowercase only, fixed-width fields.
+ *
+ * Deliberately **not** anchored at the end. A future version may append fields, and
+ * the specification requires parsing the known prefix rather than rejecting the
+ * header — see `extract`.
+ */
+const TRACEPARENT_PATTERN = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})/;
 
 /**
  * Propagates W3C Trace Context: `traceparent` and `tracestate`.
@@ -76,11 +86,27 @@ export class W3CTraceContextPropagator implements TextMapPropagator<unknown> {
       const match = TRACEPARENT_PATTERN.exec(raw);
       if (match === null) return context;
 
-      const [, version, traceId, spanId, flagsHex] = match;
+      const [matched, version, traceId, spanId, flagsHex] = match;
 
-      // Version 00 only. A future version may extend the layout, and guessing at
-      // an unknown one is worse than starting a fresh trace.
-      if (version !== SUPPORTED_VERSION) return context;
+      // `ff` is reserved and never valid.
+      if (version === FORBIDDEN_VERSION) return context;
+
+      // A *future* version must be parsed, not rejected: the specification says an
+      // implementation should read the known 55-character prefix and ignore what
+      // follows. Rejecting it would mean that the day W3C publishes version 01,
+      // every service running this code silently stops honouring incoming trace
+      // context — the failure would look like tracing simply not working.
+      //
+      // Verified against the official Python implementation, which accepts `01-…`
+      // and `01-…-extra` and rejects `00-…-extra`.
+      if (version === SUPPORTED_VERSION) {
+        // Version 00 is exactly 55 characters; trailing data is malformed.
+        if (raw.length !== matched.length) return context;
+      } else if (raw.length > matched.length && raw[matched.length] !== '-') {
+        // A newer version's extra fields must be delimited.
+        return context;
+      }
+
       if (!isValidTraceId(traceId) || !isValidSpanId(spanId)) return context;
 
       // Bit 0 is `sampled`. Unknown bits must not defeat the one we understand.
