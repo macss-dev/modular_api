@@ -1,6 +1,8 @@
 import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart';
 import 'package:shelf/shelf.dart';
 
+import '../logger/logger.dart';
+import '../logger/logging_middleware.dart';
 import 'propagation_policy.dart';
 
 /// Context key under which the server span is exposed to downstream handlers.
@@ -47,7 +49,19 @@ Middleware tracingMiddleware({
       if (excluded.contains(path)) return innerHandler(request);
 
       final method = request.method.toUpperCase();
-      final resolved = policy.resolve(request.headers);
+
+      // Reuse what `loggingMiddleware` already resolved when it is present. Resolving
+      // twice would produce two different generated trace ids for one request — the
+      // log pointing at one trace and the span living in another — so this is a
+      // correctness requirement, not an optimisation.
+      final resolved =
+          (request.context[resolvedPropagationContextKey] as PropagationResult?) ??
+              policy.resolve(request.headers);
+
+      // The logger owns the trace id, so a locally generated one must come from there
+      // rather than from the tracer, or the two would disagree.
+      final inheritedTraceId =
+          request.context[resolvedTraceIdContextKey] as String?;
 
       final span = tracer.startSpan(
         // Semantic convention for an HTTP server span: method then route.
@@ -62,7 +76,25 @@ Middleware tracingMiddleware({
         // Passing it explicitly rather than relying on `Context.current` also
         // keeps this deterministic: the parent is whatever propagation resolved,
         // not whatever happened to be ambient.
-        context: resolved.context,
+        // The two parameters do different jobs, and using the wrong one is the
+        // single easiest mistake here:
+        //
+        // - `context` supplies the PARENT. The parent link is read from
+        //   `context.spanContext`.
+        // - `spanContext` supplies this span's own TRACE ID, and nothing else.
+        //
+        // A remote parent goes through `context`. A root span goes through
+        // `spanContext`, so it adopts the trace id the logger already committed to
+        // rather than letting the tracer mint a second one — which would leave the
+        // log pointing at a trace the span does not belong to.
+        //
+        // Seeding a context instead does not work: a SpanContext with an invalid span
+        // id is not valid, so the SDK discards it and generates a fresh trace id.
+        // Found by the test asserting the log and the span agree.
+        context: resolved.hasRemoteParent ? resolved.context : null,
+        spanContext: resolved.hasRemoteParent
+            ? null
+            : _traceIdCarrier(inheritedTraceId),
         kind: SpanKind.server,
         attributes: OTelAPI.attributesFromMap(<String, Object>{
           'http.request.method': method,
@@ -73,6 +105,14 @@ Middleware tracingMiddleware({
             'http.request.header.x-request-id': resolved.requestId!,
         }),
       );
+
+      // Attach the span id to the logger the outer middleware created. It is the same
+      // object that will emit `request completed` after this span has ended, so this is
+      // what makes the line carrying `duration_ms` correlate at all.
+      final logger = request.context[loggerContextKey];
+      if (logger is RequestScopedLogger) {
+        logger.spanId = span.spanContext.spanId.hexString;
+      }
 
       final enriched = request.change(
         context: <String, Object>{
@@ -108,4 +148,22 @@ Middleware tracingMiddleware({
       });
     };
   };
+}
+
+/// Carries [traceId] into `startSpan`, so a root span adopts the id the logger already
+/// committed to instead of the tracer minting a second one.
+///
+/// Only the trace id is read from the returned value; the span id is filler.
+SpanContext? _traceIdCarrier(String? traceId) {
+  if (traceId == null) return null;
+  try {
+    return OTelAPI.spanContext(
+      traceId: OTelAPI.traceIdFrom(traceId),
+      spanId: OTelAPI.spanId(),
+    );
+  } catch (_) {
+    // A trace id that is not valid hex — only reachable when no propagation policy is
+    // in play, where tracing is off anyway. Fall back to a fresh trace.
+    return null;
+  }
 }

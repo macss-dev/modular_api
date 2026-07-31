@@ -230,6 +230,12 @@ class ModularApi {
       loggingMiddleware(
         logLevel: logLevel,
         serviceName: title,
+        // Present only when tracing is configured, which is what keeps the log format
+        // unchanged for a consumer who has not adopted tracing (runbook D5b). It also
+        // means the trace id is resolved exactly once per request, here, and reused by
+        // the tracing middleware — so the log and the span cannot disagree.
+        propagationPolicy: tracing?.policy,
+        traceFieldFormatter: tracing?.traceFieldFormatter,
         excludedRoutes: [
           operationalPaths.healthPath,
           operationalPaths.docsPath,
