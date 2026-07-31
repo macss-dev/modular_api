@@ -44,20 +44,20 @@ class RequestScopedLogger implements ModularLogger {
   /// Builds platform correlation fields. `null` means none are emitted.
   final TraceFieldFormatter? traceFieldFormatter;
 
-  /// The active server span's id, attached by the tracing middleware.
+  /// The active server span's id, when tracing is configured.
   ///
-  /// Mutable because of an ordering constraint that has no other clean answer: the
-  /// logger is created by `loggingMiddleware`, which is outermost, so it exists before
-  /// any span does — and it emits `request completed` after the span has ended. Reading
-  /// an ambient span at log time would leave that line, the one carrying `duration_ms`,
-  /// with nothing to correlate on. Attaching the id to this object instead means every
-  /// line logged after the span starts carries it, including the last one.
-  String? spanId;
+  /// Known at construction because the tracing middleware is **outermost** (runbook
+  /// D12 as reversed): the span already exists when `loggingMiddleware` creates this
+  /// logger, so nothing needs mutating afterwards. An earlier design had logging
+  /// outside tracing and had to attach this later, which is the scaffolding that
+  /// reversal removed.
+  final String? spanId;
 
   RequestScopedLogger({
     required this.traceId,
     required this.logLevel,
     required this.serviceName,
+    this.spanId,
     this.requestId,
     this.traceFieldFormatter,
     StringSink? sink,

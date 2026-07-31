@@ -307,20 +307,15 @@ export class ModularApi {
         operationalPaths.openApiYamlPath,
         ...(operationalPaths.metricsPath ? [operationalPaths.metricsPath] : []),
       ];
-      this.app.use(
-        loggingMiddleware({
-          logLevel: this.logLevel,
-          serviceName: this.title,
-          excludedRoutes: excludedLogRoutes,
-        }),
-      );
-
-      // Tracing immediately after logging and therefore BEFORE every plugin
-      // middleware. A span created from inside a plugin slot would miss the plugin
-      // middleware registered before it, leaving a hole in the waterfall exactly
-      // where cold start and early middleware live (ADR-0005 decision 4, runbook
-      // D12). Absent options install nothing, which is what makes tracing free when
-      // it is off (gate G3).
+      // Tracing is the OUTERMOST middleware, with logging inside it (runbook D12 as
+      // reversed). The logger then runs within the span's active scope and reads
+      // `trace_id` and `span_id` from the ambient span on every line. An earlier design
+      // had this after logging, which forced the logger to own the trace id and the span
+      // to adopt it — and here that meant seeding a parent, whose trace flags made the
+      // default ParentBased sampler drop the span entirely.
+      //
+      // Absent options install nothing, which is what makes tracing free when it is off
+      // (gate G3).
       const tracing = this.tracing;
       if (tracing !== undefined) {
         this.app.use(
@@ -331,6 +326,17 @@ export class ModularApi {
           }),
         );
       }
+
+      this.app.use(
+        loggingMiddleware({
+          logLevel: this.logLevel,
+          serviceName: this.title,
+          excludedRoutes: excludedLogRoutes,
+          ...(this.tracing?.traceFieldFormatter === undefined
+            ? {}
+            : { traceFieldFormatter: this.tracing.traceFieldFormatter }),
+        }),
+      );
 
       // Body parsing AFTER loggingMiddleware — SyntaxErrors now have trace_id.
       this.app.use(express.json());

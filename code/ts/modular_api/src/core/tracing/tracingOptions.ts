@@ -1,5 +1,6 @@
 import type { TextMapPropagator, Tracer, TracerProvider } from '@opentelemetry/api';
 
+import type { TraceFieldFormatter } from '../logger/logger';
 import { PropagationPolicy } from './propagationPolicy';
 
 export interface TracingOptionsInit {
@@ -26,6 +27,15 @@ export interface TracingOptionsInit {
 
   /** The instrumentation scope name reported to the backend. */
   readonly instrumentationName?: string;
+
+  /**
+   * Builds platform-specific log correlation fields, or undefined for none.
+   *
+   * The framework emits open formats and nothing vendor-specific (roadmap invariant 7),
+   * so a field like Google's `logging.googleapis.com/trace` — which needs a project id
+   * the framework has no business knowing — is produced here by the application.
+   */
+  readonly traceFieldFormatter?: TraceFieldFormatter;
 }
 
 /**
@@ -44,6 +54,7 @@ export class TracingOptions {
   readonly tracerProvider: TracerProvider;
   readonly trustIncomingTraceContext: boolean;
   readonly instrumentationName: string;
+  readonly traceFieldFormatter?: TraceFieldFormatter;
   private readonly propagators?: readonly TextMapPropagator<unknown>[];
 
   constructor(init: TracingOptionsInit) {
@@ -51,6 +62,7 @@ export class TracingOptions {
     this.propagators = init.propagators;
     this.trustIncomingTraceContext = init.trustIncomingTraceContext ?? true;
     this.instrumentationName = init.instrumentationName ?? 'modular_api';
+    this.traceFieldFormatter = init.traceFieldFormatter;
   }
 
   /** The propagation policy these options describe. */
