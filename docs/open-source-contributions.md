@@ -72,7 +72,7 @@ test its own instrumentation.
 | | |
 |---|---|
 | **Target** | **A standalone package we publish** — not dartastic |
-| **Status** | `identified` (2026-07-30), package to be created as part of the 0.7.0 work |
+| **Status** | **`submitted` — published to pub.dev 2026-07-30 as 0.0.1**, publisher `ccisne.dev`, **160 pub points** |
 | **Confidence** | Medium — the code is certain, the eventual home is not |
 | **Blocked on** | Nothing. This one is independent of dartastic's donation timeline, which makes it the safest to act on. |
 
@@ -138,10 +138,11 @@ alongside `0.7.0`, so `socia`'s dogfood runs against a published version rather 
 | | |
 |---|---|
 | **Target** | `dartastic_opentelemetry` — **but ask before writing anything** |
-| **Status** | `asked` — pending an answer |
+| **Status** | `identified` — question **drafted, not yet sent** |
 | **Confidence** | Lowest of the four, and not for technical reasons |
-| **Asked on** | 2026-07-30 |
-| **Next review** | **2026-08-30**, then quarterly. No answer is itself an answer; see below. |
+| **Drafted on** | 2026-07-30 |
+| **To send as** | A GitHub issue on the dartastic repository, posted by a maintainer of this project — it speaks in our voice and asks about someone's livelihood, so it is not something to delegate |
+| **Next review** | 30 days after it is actually sent, then quarterly. Fill the sent date in here. |
 
 **How we found it.** modular_api's server-side instrumentation is built on shelf (runbook Stages 5, 8,
 9). The open-source Dart SDK ships no HTTP server instrumentation, so ours is entirely ours.
@@ -159,7 +160,7 @@ done — or accepting work that undercuts their livelihood.
 costs a maintainer thirty seconds and the answer shapes whether we write anything at all, so it goes out
 now rather than after `0.7.0`.
 
-**The question as sent:**
+**The question as drafted** — not yet sent:
 
 > We maintain modular_api, a use-case-centric API framework for Dart, and we have just built
 > OpenTelemetry instrumentation for it on top of `dartastic_opentelemetry_api` — server spans over shelf,
@@ -244,5 +245,6 @@ Kept separately from the log so the reasoning is findable, not buried in a diff.
 |---|---|---|
 | 2026-07-30 | all | Created from the ADR-0005 tracing work. Four gaps identified, one repointed from dartastic to a standalone package after checking ecosystem convention. |
 | 2026-07-30 | #3 | Decided its own repository over a directory in this one; recorded version line 0.0.1 and the sequencing constraints against the tracing runbook. |
-| 2026-07-30 | #4 | Question drafted and sent, covering shelf instrumentation plus the two smaller API-package asks. Review 2026-08-30, then quarterly. |
+| 2026-07-30 | #4 | Question drafted, NOT yet sent. Covers shelf instrumentation plus the two smaller API-package asks. Record the sent date in the entry when it goes out; review 30 days later. |
 | 2026-07-30 | #5 | Recorded the contribute-first decision and when to revisit it. |
+| 2026-07-30 | #3 | Package created, repo `ccisnedev/opentelemetry_propagator_gcp`, and **published to pub.dev as 0.0.1 at 160 pub points**. The transfer offer in its README is now a public commitment, not an intention. Next: no action until someone asks, or until a Dart OTel SIG exists to offer it to. |

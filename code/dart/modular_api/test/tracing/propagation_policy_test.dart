@@ -224,15 +224,25 @@ void main() {
     });
   });
 
-  test('resolution allocates no span (D7, G3)', () {
-    // The policy returns a context, never a span. Span creation is the middleware's
-    // job and only happens when tracing is configured.
-    final result = const PropagationPolicy().resolve({
-      traceparentHeader: traceparent,
+  group('resolution allocates no span (D7, G3)', () {
+    test('a resolved remote parent is a span context, not a span', () {
+      // The distinction is the whole of D7: a SpanContext is data describing a
+      // parent, a Span is a live recording object. Only the middleware creates
+      // spans, and only when tracing is configured.
+      final result = const PropagationPolicy().resolve({
+        traceparentHeader: traceparent,
+      });
+
+      expect(result.context.spanContext, isNotNull);
+      expect(result.context.span, isNull);
     });
 
-    expect(result.context, isA<Context>());
-    expect(result.context.spanContext, isA<SpanContext>());
+    test('an unmatched resolution holds neither', () {
+      final result = const PropagationPolicy().resolve(const {});
+
+      expect(result.context.spanContext, isNull);
+      expect(result.context.span, isNull);
+    });
   });
 }
 
