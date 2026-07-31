@@ -41,6 +41,16 @@ export 'src/core/schema/field.dart'
 // Logger
 export 'src/core/logger/logger.dart' show LogLevel, ModularLogger;
 
+/// Distributed tracing (ADR-0005). The framework depends on the OpenTelemetry
+/// **API**; the application supplies the SDK and its tracer provider.
+export 'src/core/tracing/tracing_options.dart' show TracingOptions;
+export 'src/core/tracing/propagation_policy.dart'
+    show PropagationPolicy, PropagationResult, requestIdHeader;
+export 'src/core/tracing/w3c_trace_context_propagator.dart'
+    show W3CTraceContextPropagator, traceparentHeader, tracestateHeader;
+export 'src/core/tracing/tracing_middleware.dart'
+    show tracingSpanContextKey, propagationResultContextKey;
+
 // Health
 export 'src/core/health/health_check.dart'
     show HealthCheck, HealthCheckResult, HealthStatus;

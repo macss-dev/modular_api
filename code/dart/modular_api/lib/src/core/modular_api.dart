@@ -5,6 +5,7 @@ import 'package:modular_api/src/graphql/runtime/graphql_runtime_health.dart';
 import 'package:modular_api/src/core/logger/logging_middleware.dart';
 import 'package:modular_api/src/core/metrics/metric_registry.dart';
 import 'package:modular_api/src/core/official_plugins.dart';
+import 'package:modular_api/src/core/tracing/tracing_middleware.dart';
 import 'package:modular_api/src/core/usecase/usecase_http_handler.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -27,6 +28,9 @@ class ModularApi {
 
   // ── Logger ──
   final LogLevel logLevel;
+
+  /// Distributed tracing options, or `null` when tracing is off (ADR-0005).
+  final TracingOptions? tracing;
 
   // ── OpenAPI ──
   final List<Map<String, String>>? servers;
@@ -59,6 +63,10 @@ class ModularApi {
   /// [metricsPath] — Path for the metrics endpoint (default `/metrics`).
   /// [excludedMetricsRoutes] — Routes excluded from instrumentation.
   /// [logLevel] — Minimum RFC 5424 severity to emit (default `LogLevel.info`).
+  /// [tracing] — Opt-in distributed tracing. Absent means off and costs nothing:
+  /// no tracing middleware is installed and no span is ever created. The
+  /// application supplies the tracer provider; the framework depends on the
+  /// OpenTelemetry API only. See [TracingOptions].
   ModularApi({
     this.basePath = '/api',
     this.title = 'Modular API',
@@ -70,6 +78,7 @@ class ModularApi {
     this.metricsPath = '/metrics',
     List<String>? excludedMetricsRoutes,
     this.logLevel = LogLevel.info,
+    this.tracing,
   })  : _healthService = HealthService(
           version: version,
           releaseId: releaseId,
@@ -230,6 +239,34 @@ class ModularApi {
         ],
       ),
     );
+    // Tracing immediately INSIDE logging and therefore outside every plugin
+    // middleware. A span created from inside a plugin slot would miss the plugin
+    // middleware registered before it, leaving a hole in the waterfall exactly
+    // where cold start and early middleware live (ADR-0005 decision 4, runbook
+    // D12). Inside logging rather than outside so the logger can read the resolved
+    // ids; the cost is that `duration_ms` is always marginally larger than the
+    // span's duration.
+    //
+    // Absent options install nothing at all, which is what makes tracing free when
+    // it is off (gate G3).
+    final tracingOptions = tracing;
+    if (tracingOptions != null) {
+      pipeline = pipeline.addMiddleware(
+        tracingMiddleware(
+          tracer: tracingOptions.tracer,
+          policy: tracingOptions.policy,
+          excludedRoutes: [
+            operationalPaths.healthPath,
+            operationalPaths.docsPath,
+            operationalPaths.openApiJsonPath,
+            operationalPaths.openApiYamlPath,
+            if (operationalPaths.metricsPath != null)
+              operationalPaths.metricsPath!,
+          ],
+        ),
+      );
+    }
+
     pipeline = pipeline.addMiddleware(errorResponseMiddleware());
 
     for (final middleware in pluginHost.middlewaresForSlot('preRouting')) {
