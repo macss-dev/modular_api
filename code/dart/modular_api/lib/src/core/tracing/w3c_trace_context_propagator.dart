@@ -6,12 +6,20 @@ const String traceparentHeader = 'traceparent';
 /// The W3C `tracestate` carrier key.
 const String tracestateHeader = 'tracestate';
 
-/// The only version defined by the W3C Trace Context recommendation.
+/// The only version currently defined by the W3C Trace Context recommendation.
 const String _supportedVersion = '00';
 
-/// `00-<32 hex>-<16 hex>-<2 hex>` — lowercase only, every field fixed-width.
+/// Reserved by the specification and never valid.
+const String _forbiddenVersion = 'ff';
+
+/// The 55 characters every version must begin with:
+/// `<version>-<32 hex>-<16 hex>-<2 hex>`, lowercase only, fixed-width fields.
+///
+/// Deliberately **not** anchored at the end. A future version may append fields,
+/// and the specification requires parsing the known prefix rather than rejecting
+/// the header — see [W3CTraceContextPropagator.extract].
 final RegExp _traceparentPattern =
-    RegExp(r'^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$');
+    RegExp(r'^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})');
 
 final String _invalidTraceId = '0' * 32;
 final String _invalidSpanId = '0' * 16;
@@ -82,9 +90,26 @@ class W3CTraceContextPropagator<C> implements TextMapPropagator<C, String> {
       final match = _traceparentPattern.firstMatch(raw);
       if (match == null) return context;
 
-      // Version 00 only. A future version may extend the format, and guessing at
-      // an unknown layout is worse than starting a fresh trace.
-      if (match.group(1) != _supportedVersion) return context;
+      final version = match.group(1)!;
+
+      // `ff` is reserved and never valid.
+      if (version == _forbiddenVersion) return context;
+
+      // A *future* version must be parsed, not rejected: the specification says an
+      // implementation should read the known 55-character prefix and ignore what
+      // follows. Rejecting it would mean that the day W3C publishes version 01,
+      // every service running this code silently stops honouring incoming trace
+      // context — the failure would look like tracing simply not working.
+      //
+      // Verified against the official Python implementation, which accepts
+      // `01-…` and `01-…-extra` and rejects `00-…-extra`.
+      if (version == _supportedVersion) {
+        // Version 00 is exactly 55 characters; trailing data is malformed.
+        if (raw.length != match.end) return context;
+      } else if (raw.length > match.end && raw[match.end] != '-') {
+        // A newer version's extra fields must be delimited.
+        return context;
+      }
 
       final traceId = match.group(2)!;
       final spanId = match.group(3)!;

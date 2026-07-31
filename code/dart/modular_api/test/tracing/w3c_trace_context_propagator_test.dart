@@ -86,12 +86,10 @@ void main() {
       });
 
       for (final malformed in <String, String>{
-        'unsupported version 01': '01-$traceIdHex-$spanIdHex-01',
-        'unsupported version ff': 'ff-$traceIdHex-$spanIdHex-01',
+        'forbidden version ff': 'ff-$traceIdHex-$spanIdHex-01',
         'short trace id': '00-abc-$spanIdHex-01',
         'short span id': '00-$traceIdHex-abc-01',
         'missing flags field': '00-$traceIdHex-$spanIdHex',
-        'extra field': '00-$traceIdHex-$spanIdHex-01-extra',
         'non-hex trace id': '00-${'z' * 32}-$spanIdHex-01',
         'non-hex flags': '00-$traceIdHex-$spanIdHex-zz',
         'uppercase hex': '00-${traceIdHex.toUpperCase()}-$spanIdHex-01',
@@ -104,6 +102,42 @@ void main() {
           expect(_extract(malformed.value).spanContext, isNull);
         });
       }
+    });
+
+    group('forward compatibility with future versions', () {
+      // The specification requires reading the known 55-character prefix of a
+      // higher version rather than rejecting it. Rejecting would mean that the day
+      // W3C publishes version 01, every service running this code silently stops
+      // honouring incoming trace context.
+      //
+      // These three expectations were taken from the official Python
+      // implementation, which is the reference for this stage (D26). Our first
+      // version of this propagator rejected version 01 outright, and comparing
+      // against that oracle is what caught it.
+      test('accepts a future version by reading the known prefix', () {
+        final spanContext = _extract('01-$traceIdHex-$spanIdHex-01').spanContext;
+
+        expect(spanContext, isNotNull);
+        expect(spanContext!.traceId.hexString, equals(traceIdHex));
+        expect(spanContext.spanId.hexString, equals(spanIdHex));
+        expect(spanContext.traceFlags.isSampled, isTrue);
+      });
+
+      test('accepts a future version carrying extra fields', () {
+        expect(
+          _extract('01-$traceIdHex-$spanIdHex-01-extra').spanContext,
+          isNotNull,
+        );
+      });
+
+      test('still rejects extra fields on version 00', () {
+        // Version 00 is exactly 55 characters. Trailing data is malformed, not a
+        // future extension.
+        expect(
+          _extract('00-$traceIdHex-$spanIdHex-01-extra').spanContext,
+          isNull,
+        );
+      });
     });
 
     test('injects a valid traceparent', () {

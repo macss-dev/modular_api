@@ -113,12 +113,10 @@ describe('W3CTraceContextPropagator', () => {
     });
 
     const malformed: Record<string, string> = {
-      'unsupported version 01': `01-${TRACE_ID}-${SPAN_ID}-01`,
-      'unsupported version ff': `ff-${TRACE_ID}-${SPAN_ID}-01`,
+      'forbidden version ff': `ff-${TRACE_ID}-${SPAN_ID}-01`,
       'short trace id': `00-abc-${SPAN_ID}-01`,
       'short span id': `00-${TRACE_ID}-abc-01`,
       'missing flags field': `00-${TRACE_ID}-${SPAN_ID}`,
-      'extra field': `00-${TRACE_ID}-${SPAN_ID}-01-extra`,
       'non-hex trace id': `00-${'z'.repeat(32)}-${SPAN_ID}-01`,
       'non-hex flags': `00-${TRACE_ID}-${SPAN_ID}-zz`,
       'uppercase hex': `00-${TRACE_ID.toUpperCase()}-${SPAN_ID}-01`,
@@ -133,6 +131,34 @@ describe('W3CTraceContextPropagator', () => {
         expect(trace.getSpanContext(extract(value))).toBeUndefined();
       });
     }
+  });
+
+  describe('forward compatibility with future versions', () => {
+    // The specification requires reading the known 55-character prefix of a higher
+    // version rather than rejecting it. Rejecting would mean that the day W3C
+    // publishes version 01, every service running this code silently stops
+    // honouring incoming trace context.
+    //
+    // These expectations were taken from the official Python implementation, the
+    // reference for this stage (D26). Our first version rejected 01 outright.
+    it('accepts a future version by reading the known prefix', () => {
+      const spanContext = trace.getSpanContext(extract(`01-${TRACE_ID}-${SPAN_ID}-01`));
+
+      expect(spanContext).toBeDefined();
+      expect(spanContext?.traceId).toBe(TRACE_ID);
+      expect(spanContext?.spanId).toBe(SPAN_ID);
+      expect(spanContext?.traceFlags).toBe(TraceFlags.SAMPLED);
+    });
+
+    it('accepts a future version carrying extra fields', () => {
+      expect(trace.getSpanContext(extract(`01-${TRACE_ID}-${SPAN_ID}-01-extra`))).toBeDefined();
+    });
+
+    it('still rejects extra fields on version 00', () => {
+      // Version 00 is exactly 55 characters. Trailing data is malformed, not a
+      // future extension.
+      expect(trace.getSpanContext(extract(`00-${TRACE_ID}-${SPAN_ID}-01-extra`))).toBeUndefined();
+    });
   });
 
   it('injects a valid traceparent', () => {
