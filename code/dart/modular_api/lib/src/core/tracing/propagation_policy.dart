@@ -66,6 +66,62 @@ class PropagationPolicy {
 
   /// Resolves [headers] into a context plus the preserved request id.
   PropagationResult resolve(Map<String, String> headers) {
-    throw UnimplementedError('step 3a: pending implementation');
+    // Read first and unconditionally: the request id is preserved whether or not
+    // incoming trace context is trusted, because it was never trusted as identity
+    // (D6, D25).
+    final requestId = _headerValue(headers, requestIdHeader);
+
+    if (!trustIncomingTraceContext) {
+      return PropagationResult(
+        context: OTelAPI.context(),
+        requestId: requestId,
+      );
+    }
+
+    final getter = _CaseInsensitiveHeaderGetter(headers);
+
+    for (final propagator in propagators) {
+      try {
+        final resolved = propagator.extract(OTelAPI.context(), headers, getter);
+        if (resolved.spanContext?.isValid ?? false) {
+          // First valid wins (D24).
+          return PropagationResult(context: resolved, requestId: requestId);
+        }
+      } catch (_) {
+        // A third-party propagator is not our code, and one misbehaving entry
+        // must not fail a request. Move on to the next.
+        continue;
+      }
+    }
+
+    // No parent accepted. The tracer starts a fresh trace and generates its own
+    // ids — nothing is generated here, which is what keeps this allocation-free.
+    return PropagationResult(context: OTelAPI.context(), requestId: requestId);
   }
+}
+
+/// Reads a header case-insensitively, as HTTP requires.
+String? _headerValue(Map<String, String> headers, String name) {
+  final wanted = name.toLowerCase();
+  for (final entry in headers.entries) {
+    if (entry.key.toLowerCase() == wanted) return entry.value;
+  }
+  return null;
+}
+
+/// Carrier reader with HTTP semantics.
+///
+/// Header casing belongs to the carrier rather than to any propagator, so it is
+/// handled once here instead of in each of them. Shelf already lowercases header
+/// names; this covers callers that do not.
+class _CaseInsensitiveHeaderGetter implements TextMapGetter<String> {
+  const _CaseInsensitiveHeaderGetter(this._headers);
+
+  final Map<String, String> _headers;
+
+  @override
+  String? get(String key) => _headerValue(_headers, key);
+
+  @override
+  Iterable<String> keys() => _headers.keys;
 }
