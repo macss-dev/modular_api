@@ -223,38 +223,16 @@ class ModularApi {
     }
 
     var pipeline = const Pipeline();
-
-    // Logging middleware FIRST (outermost) to capture full lifecycle
-    // including all subsequent middlewares.
-    pipeline = pipeline.addMiddleware(
-      loggingMiddleware(
-        logLevel: logLevel,
-        serviceName: title,
-        // Present only when tracing is configured, which is what keeps the log format
-        // unchanged for a consumer who has not adopted tracing (runbook D5b). It also
-        // means the trace id is resolved exactly once per request, here, and reused by
-        // the tracing middleware — so the log and the span cannot disagree.
-        propagationPolicy: tracing?.policy,
-        traceFieldFormatter: tracing?.traceFieldFormatter,
-        excludedRoutes: [
-          operationalPaths.healthPath,
-          operationalPaths.docsPath,
-          operationalPaths.openApiJsonPath,
-          operationalPaths.openApiYamlPath,
-          if (operationalPaths.metricsPath != null) operationalPaths.metricsPath!,
-        ],
-      ),
-    );
-    // Tracing immediately INSIDE logging and therefore outside every plugin
-    // middleware. A span created from inside a plugin slot would miss the plugin
-    // middleware registered before it, leaving a hole in the waterfall exactly
-    // where cold start and early middleware live (ADR-0005 decision 4, runbook
-    // D12). Inside logging rather than outside so the logger can read the resolved
-    // ids; the cost is that `duration_ms` is always marginally larger than the
-    // span's duration.
+    // Tracing is the OUTERMOST middleware, with logging inside it (runbook D12 as
+    // reversed). The logger then runs within the span's active scope and reads
+    // `trace_id` and `span_id` from the ambient span on every line, including
+    // `request completed`. An earlier design had this inside logging, which forced the
+    // logger to own the trace id and the span to adopt it — expressible in Dart but not
+    // in TypeScript without seeding a parent, where the seeded trace flags made the
+    // sampler drop the span.
     //
-    // Absent options install nothing at all, which is what makes tracing free when
-    // it is off (gate G3).
+    // Absent options install nothing at all, which is what makes tracing free when it
+    // is off (gate G3).
     final tracingOptions = tracing;
     if (tracingOptions != null) {
       pipeline = pipeline.addMiddleware(
@@ -273,6 +251,24 @@ class ModularApi {
       );
     }
 
+
+
+    // Logging middleware FIRST (outermost) to capture full lifecycle
+    // including all subsequent middlewares.
+    pipeline = pipeline.addMiddleware(
+      loggingMiddleware(
+        logLevel: logLevel,
+        serviceName: title,
+        traceFieldFormatter: tracing?.traceFieldFormatter,
+        excludedRoutes: [
+          operationalPaths.healthPath,
+          operationalPaths.docsPath,
+          operationalPaths.openApiJsonPath,
+          operationalPaths.openApiYamlPath,
+          if (operationalPaths.metricsPath != null) operationalPaths.metricsPath!,
+        ],
+      ),
+    );
     pipeline = pipeline.addMiddleware(errorResponseMiddleware());
 
     for (final middleware in pluginHost.middlewaresForSlot('preRouting')) {

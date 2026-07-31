@@ -5,7 +5,6 @@ import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart'
     as otel;
 import 'package:shelf/shelf.dart';
 import '../request_pipeline_audit.dart';
-import '../tracing/propagation_policy.dart';
 import 'logger.dart';
 import 'uuid.dart';
 
@@ -15,15 +14,6 @@ import 'uuid.dart';
 /// final logger = req.context['modular.logger'] as ModularLogger?;
 /// ```
 const loggerContextKey = 'modular.logger';
-
-/// Context key carrying the [PropagationResult] `loggingMiddleware` resolved.
-///
-/// Present only when tracing is configured. The tracing middleware reads it rather
-/// than resolving the headers a second time.
-const resolvedPropagationContextKey = 'modular.propagation.resolved';
-
-/// Context key carrying the trace id the logger is using.
-const resolvedTraceIdContextKey = 'modular.propagation.traceId';
 
 /// Creates a Shelf [Middleware] that:
 ///
@@ -42,7 +32,6 @@ Middleware loggingMiddleware({
   required String serviceName,
   List<String> excludedRoutes = const [],
   StringSink? sink,
-  PropagationPolicy? propagationPolicy,
   TraceFieldFormatter? traceFieldFormatter,
 }) {
   final excludedSet = Set<String>.from(excludedRoutes);
@@ -56,24 +45,36 @@ Middleware loggingMiddleware({
         return innerHandler(request);
       }
 
-      // 1. Resolve trace_id.
+      // 1. Resolve the ids from the ambient span.
       //
-      // With a propagation policy — which the host supplies only when tracing is
-      // configured — the trace id is the W3C one, resolved once here and reused by the
-      // tracing middleware so the log and the span can never disagree. Without one,
-      // this is byte-for-byte the behaviour it always had: the caller's X-Request-ID or
-      // a fresh dashed UUID. That is D5b's compatibility guarantee, and it is why a
-      // consumer who does not adopt tracing sees no log-format change at all.
-      final propagation = propagationPolicy?.resolve(request.headers);
+      // The tracing middleware is outermost (D12 as reversed), so when tracing is
+      // configured a recording span is already active here — and it stays active for
+      // `request completed` too, which is emitted from inside its scope. That is what
+      // lets both lines carry the same ids with nothing mutated afterwards.
+      //
+      // With no recording span, this is byte-for-byte the behaviour it always had: the
+      // caller's X-Request-ID or a fresh dashed UUID. D5b's compatibility guarantee is
+      // therefore structural rather than conditional — there is no tracing flag to
+      // consult, only whether a span exists.
+      final activeSpan = otel.Context.current.span;
+      final tracingActive = activeSpan != null && activeSpan.spanContext.isValid;
+
       final String traceId;
-      if (propagation != null) {
-        traceId = propagation.hasRemoteParent
-            ? propagation.context.spanContext!.traceId.hexString
-            : otel.OTelAPI.traceId().hexString;
+      final String? spanId;
+      final String? requestId;
+      if (tracingActive) {
+        traceId = activeSpan.spanContext.traceId.hexString;
+        spanId = activeSpan.spanContext.spanId.hexString;
+        // Preserved beside the trace id rather than promoted into it (D6).
+        requestId = request.headers['X-Request-ID']?.isNotEmpty == true
+            ? request.headers['X-Request-ID']
+            : null;
       } else {
         traceId = request.headers['X-Request-ID']?.isNotEmpty == true
             ? request.headers['X-Request-ID']!
             : generateUuidV4();
+        spanId = null;
+        requestId = null;
       }
 
       // 2. Create per-request logger
@@ -81,10 +82,12 @@ Middleware loggingMiddleware({
         traceId: traceId,
         logLevel: logLevel,
         serviceName: serviceName,
-        requestId: propagation?.requestId,
+        spanId: spanId,
+        requestId: requestId,
         traceFieldFormatter: traceFieldFormatter,
         sink: sink ?? stdout,
       );
+
       final auditState = RequestPipelineAuditState();
 
       final method = request.method.toUpperCase();
@@ -99,11 +102,6 @@ Middleware loggingMiddleware({
           ...request.context,
           loggerContextKey: logger,
           requestPipelineAuditContextKey: auditState,
-          // Resolved once, here. The tracing middleware reads this instead of
-          // resolving again, so the trace id in the log and the trace id on the span
-          // are the same value by construction rather than by coincidence.
-          if (propagation != null) resolvedPropagationContextKey: propagation,
-          if (propagation != null) resolvedTraceIdContextKey: traceId,
         },
       );
 

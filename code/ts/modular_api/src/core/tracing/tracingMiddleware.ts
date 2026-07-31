@@ -25,9 +25,10 @@ export interface TracingMiddlewareOptions {
 /**
  * Creates the middleware that owns the server span.
  *
- * **Host-owned, not plugin-owned.** Installed immediately after
- * `loggingMiddleware` and therefore before every plugin middleware, which is the
- * whole point: a span created from inside a plugin slot would miss the plugin
+ * **Host-owned, not plugin-owned, and OUTERMOST** — `loggingMiddleware` runs inside it
+ * (runbook D12 as reversed), so the logger reads `trace_id` and `span_id` from the
+ * ambient span on every line. Being outside every plugin middleware is the other half of
+ * the point: a span created from inside a plugin slot would miss the plugin
  * middleware registered before it, leaving a hole in the waterfall exactly where
  * cold start and early middleware live (ADR-0005 decision 4).
  *
@@ -60,9 +61,8 @@ export function tracingMiddleware(options: TracingMiddlewareOptions): RequestHan
     }
 
     const method = req.method.toUpperCase();
-    const resolved: PropagationResult = policy.resolve(
-      req.headers as Record<string, string>,
-    );
+
+    const resolved: PropagationResult = policy.resolve(req.headers as Record<string, string>);
 
     const span = tracer.startSpan(
       // Semantic convention for an HTTP server span: method then route.
@@ -81,6 +81,7 @@ export function tracingMiddleware(options: TracingMiddlewareOptions): RequestHan
       },
       // The parent comes from the resolved context, never from whatever happened to
       // be ambient — the same determinism the Dart version keeps.
+      //
       resolved.context,
     );
 

@@ -5,8 +5,11 @@
 // ============================================================
 
 import { randomUUID } from 'node:crypto';
+
+import { context as otelContext, trace } from '@opentelemetry/api';
+
 import type { RequestHandler } from 'express';
-import { LogLevel, RequestScopedLogger } from './logger';
+import { LogLevel, RequestScopedLogger, type TraceFieldFormatter } from './logger';
 import type { WriteFn } from './logger';
 import { ensureRequestPipelineAudit, readShortCircuitCandidate } from '../request_pipeline_audit';
 
@@ -19,6 +22,9 @@ export interface LoggingMiddlewareOptions {
   excludedRoutes?: string[];
   /** Override output for testing. Defaults to stdout. */
   writeFn?: WriteFn;
+
+  /** Builds platform correlation fields. Undefined means none are emitted. */
+  traceFieldFormatter?: TraceFieldFormatter;
 }
 
 /**
@@ -44,13 +50,41 @@ export function loggingMiddleware(opts: LoggingMiddlewareOptions): RequestHandle
       return next();
     }
 
-    // 1. Resolve trace_id
+    // 1. Resolve the ids from the ambient span.
+    //
+    // The tracing middleware is outermost (D12 as reversed), so when tracing is
+    // configured a recording span is already active here — and it stays active for
+    // `request completed` too. That is what lets both lines carry the same ids with
+    // nothing mutated afterwards.
+    //
+    // With no recording span this is byte-for-byte the behaviour it always had: the
+    // caller's X-Request-ID or a fresh UUID. D5b's compatibility guarantee is therefore
+    // structural rather than conditional — there is no tracing flag to consult, only
+    // whether a span exists.
+    const activeSpan = trace.getSpan(otelContext.active());
+    const activeSpanContext = activeSpan?.spanContext();
+    const tracingActive =
+      activeSpanContext !== undefined && trace.isSpanContextValid(activeSpanContext);
+
     const headerValue = req.headers['x-request-id'];
-    const traceId =
-      typeof headerValue === 'string' && headerValue.length > 0 ? headerValue : randomUUID();
+    const callerRequestId =
+      typeof headerValue === 'string' && headerValue.length > 0 ? headerValue : undefined;
+
+    const traceId = tracingActive ? activeSpanContext.traceId : (callerRequestId ?? randomUUID());
+    const spanId = tracingActive ? activeSpanContext.spanId : undefined;
+    // Preserved beside the trace id rather than promoted into it (D6).
+    const requestId = tracingActive ? callerRequestId : undefined;
 
     // 2. Create per-request logger
-    const logger = new RequestScopedLogger(traceId, opts.logLevel, opts.serviceName, opts.writeFn);
+    const logger = new RequestScopedLogger(
+      traceId,
+      opts.logLevel,
+      opts.serviceName,
+      opts.writeFn,
+      requestId,
+      spanId,
+      opts.traceFieldFormatter,
+    );
 
     const method = req.method.toUpperCase();
     const route = path;

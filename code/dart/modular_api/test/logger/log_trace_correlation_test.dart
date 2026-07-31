@@ -14,15 +14,17 @@ import 'package:test/test.dart';
 /// Tests for log↔trace correlation, and for the compatibility guarantee that makes
 /// the log-format change safe (runbook D5, D5b).
 ///
-/// **The ordering problem this stage had to solve.** `loggingMiddleware` is outermost,
-/// so it creates the logger *before* the span exists — and it emits `request completed`
-/// *after* the span has ended. Reading the ambient span at log time would therefore
-/// leave the single most useful line, the one carrying `duration_ms`, with nothing to
-/// correlate on.
+/// **The ordering these tests pin, and why it was reversed.** The tracing middleware is
+/// outermost and `loggingMiddleware` runs inside it (runbook D12 as reversed), so a
+/// recording span is already active when the logger is created and still active when it
+/// emits `request completed`. Every line reads `trace_id` and `span_id` from the ambient
+/// span, with nothing mutated afterwards.
 ///
-/// The resolution: the **logger owns the trace id** for the whole request, resolved
-/// once by `loggingMiddleware`, and the tracing middleware attaches the span id to
-/// that same logger object. Every line then correlates, including the last one.
+/// The first design had these the other way round, which forced the logger to own the
+/// trace id and the span to adopt it. That worked in Dart through `startSpan(spanContext:)`
+/// and could not be expressed in TypeScript without seeding a *parent*, where the seeded
+/// trace flags made the sampler drop the span entirely. The failing TypeScript test is
+/// what produced the reversal.
 void main() {
   const traceIdHex = '4bf92f3577b34da6a3ce929d0e0e4736';
   const traceparent = '00-$traceIdHex-00f067aa0ba902b7-01';
@@ -46,19 +48,20 @@ void main() {
   }) async {
     final sink = StringBuffer();
 
-    var pipeline = Pipeline().addMiddleware(
-      loggingMiddleware(
-        logLevel: LogLevel.debug,
-        serviceName: 'modular_api-test',
-        sink: sink,
-        propagationPolicy: tracing?.policy,
-      ),
-    );
+    var pipeline = const Pipeline();
+    // Tracing outermost, logging inside — the order the host builds (D12 reversed).
     if (tracing != null) {
       pipeline = pipeline.addMiddleware(
         tracingMiddleware(tracer: tracing.tracer, policy: tracing.policy),
       );
     }
+    pipeline = pipeline.addMiddleware(
+      loggingMiddleware(
+        logLevel: LogLevel.debug,
+        serviceName: 'modular_api-test',
+        sink: sink,
+      ),
+    );
 
     final handler = pipeline.addHandler((Request request) async {
       onRequest?.call(request);
@@ -98,9 +101,9 @@ void main() {
     });
 
     test('an incoming traceparent is ignored, not adopted', () async {
-      // Propagation runs only when there is something to propagate into (D7). Without
-      // tracing there is no span, so honouring the header would change the log format
-      // for no benefit.
+      // Without tracing there is no span to read ids from, so the header cannot reach
+      // the log even in principle — D5b's guarantee is structural rather than a flag
+      // someone has to remember to check.
       final logs = await logsFor(headers: {traceparentHeader: traceparent});
 
       expect(logs.first['trace_id'], isNot(equals(traceIdHex)));
@@ -175,10 +178,8 @@ void main() {
 
       test('reaches the request-completed line, which is emitted after the span ends',
           () async {
-        // The ordering problem stated plainly. loggingMiddleware is outermost, so it
-        // logs `request completed` after the span has already ended. Reading an ambient
-        // span at log time would have left this line — the one carrying duration_ms —
-        // uncorrelated. Attaching the span id to the logger object solves it.
+        // The line that matters most: it carries duration_ms. It is emitted from inside
+        // the span's active scope, so the ambient span is still there to read.
         final logs = await logsFor(tracing: tracingOptions());
         final completed = logs.firstWhere((log) => log['msg'] == 'request completed');
 
@@ -186,14 +187,14 @@ void main() {
         expect(completed['span_id'], isNotNull);
       });
 
-      test('is absent from request-received, logged before the span exists', () async {
-        // Honest about the limit rather than papering over it: the first line cannot
-        // carry a span id, because no span exists yet. It still carries trace_id, which
-        // is what links it to the trace.
+      test('reaches request-received too, because the span already exists', () async {
+        // A limit the earlier design accepted as inevitable and the reversal removed.
+        // With tracing outermost the span is active before the logger is created, so
+        // the very first line correlates as fully as the last.
         final logs = await logsFor(tracing: tracingOptions());
         final received = logs.firstWhere((log) => log['msg'] == 'request received');
 
-        expect(received.containsKey('span_id'), isFalse);
+        expect(received['span_id'], isNotNull);
         expect(received['trace_id'], isNotNull);
       });
     });
@@ -218,11 +219,13 @@ void main() {
 
       final handler = Pipeline()
           .addMiddleware(
+            tracingMiddleware(tracer: tracing.tracer, policy: tracing.policy),
+          )
+          .addMiddleware(
             loggingMiddleware(
               logLevel: LogLevel.debug,
               serviceName: 'modular_api-test',
               sink: sink,
-              propagationPolicy: tracing.policy,
               // What socia supplies: the GCP field, built from ids the framework
               // resolved and a project id only the application knows.
               traceFieldFormatter: (traceId, spanId) => {
@@ -231,9 +234,6 @@ void main() {
                 if (spanId != null) 'logging.googleapis.com/spanId': spanId,
               },
             ),
-          )
-          .addMiddleware(
-            tracingMiddleware(tracer: tracing.tracer, policy: tracing.policy),
           )
           .addHandler((Request request) async => Response.ok(''));
 
