@@ -1,5 +1,6 @@
 import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart';
 
+import '../logger/logger.dart';
 import 'propagation_policy.dart';
 
 /// Turns tracing on and says how.
@@ -46,6 +47,7 @@ class TracingOptions {
     List<TextMapPropagator<Map<String, String>, String>>? propagators,
     this.trustIncomingTraceContext = true,
     this.instrumentationName = 'modular_api',
+    this.traceFieldFormatter,
   }) : _propagators = propagators;
 
   /// The application's tracer provider.
@@ -58,6 +60,21 @@ class TracingOptions {
 
   /// The instrumentation scope name reported to the backend.
   final String instrumentationName;
+
+  /// Builds platform-specific log correlation fields, or `null` for none.
+  ///
+  /// The framework emits open formats and nothing vendor-specific (roadmap invariant
+  /// 7), so a field like Google's `logging.googleapis.com/trace` — which needs a
+  /// project id the framework has no business knowing — is produced here by the
+  /// application:
+  ///
+  /// ```dart
+  /// traceFieldFormatter: (traceId, spanId) => {
+  ///   'logging.googleapis.com/trace': 'projects/my-project/traces/$traceId',
+  ///   if (spanId != null) 'logging.googleapis.com/spanId': spanId,
+  /// }
+  /// ```
+  final TraceFieldFormatter? traceFieldFormatter;
 
   /// The propagation policy these options describe.
   PropagationPolicy get policy => _propagators == null

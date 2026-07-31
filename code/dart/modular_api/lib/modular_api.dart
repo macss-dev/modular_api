@@ -39,7 +39,8 @@ export 'src/core/usecase/use_case_exception.dart' show UseCaseException;
 export 'src/core/schema/field.dart'
     show SchemaField, buildSchema, InputValidationException, validateJsonFields;
 // Logger
-export 'src/core/logger/logger.dart' show LogLevel, ModularLogger;
+export 'src/core/logger/logger.dart'
+    show LogLevel, ModularLogger, TraceFieldFormatter;
 
 /// Distributed tracing (ADR-0005). The framework depends on the OpenTelemetry
 /// **API**; the application supplies the SDK and its tracer provider.
