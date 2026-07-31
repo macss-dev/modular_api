@@ -98,11 +98,38 @@ emit a GCP-specific header to services that never asked for it. We adopt the sam
 as the default (runbook D27).
 
 **Naming and stewardship.** Published as `opentelemetry_propagator_gcp`, mirroring the Python name so it
-is findable by anyone arriving from another language. The README must state plainly that it is
-community-maintained, that it mirrors the official Python/Go/JS packages, and that **we will hand it to
-GoogleCloudPlatform or the OpenTelemetry project if either wants it**. Publishing under a generic
-ecosystem name carries a duty not to squat: the verified publisher makes authorship visible, and the
-offer to transfer makes the intent explicit.
+is findable by anyone arriving from another language. Starting at **0.0.1**, its own version line. The
+README must state plainly that it is community-maintained, that it mirrors the official Python/Go/JS
+packages, and that **we will hand it to GoogleCloudPlatform or the OpenTelemetry project if either wants
+it**. Publishing under a generic ecosystem name carries a duty not to squat: the verified publisher makes
+authorship visible, and the offer to transfer makes the intent explicit.
+
+**It lives in its own repository, not in `modular_api/code/`.** Decided 2026-07-30. Four reasons, and the
+first is decisive given that donation is the stated goal:
+
+1. **Donation is a one-click operation from its own repo.** GitHub's *Transfer ownership* moves the repo,
+   its issues, its stars and its history in a single action. Extracting a subdirectory from another
+   project's repository means `git filter-repo` surgery and hands the recipient a history entangled with
+   an unrelated framework. If we intend to give this away, we should not build it somewhere that makes
+   giving it away a project.
+2. **modular_api does not depend on it, so there is no coupling to pay for.** After the architectural
+   correction, core's default propagator chain is W3C only and the Cloud Trace propagator is supplied by
+   the *application*. `socia` depends on this package; the framework does not. Nothing about keeping them
+   together would have been convenient anyway.
+3. **Provenance is auditable.** If OpenTelemetry accepts a donation they need clear licence and
+   authorship history. A repository containing only this package is trivial to audit; a monorepo's
+   history is not.
+4. **It follows the structure that already exists.** `macss/` is a set of sibling independent repositories
+   — `modular_api`, `cli_router`, `service_client` and the rest are each their own repo. A new sibling is
+   the existing pattern, not a new one.
+
+**Location:** `macss/opentelemetry_propagator_gcp`, sibling to `modular_api`. During development `socia`
+points at it with a `path:` override, the same mechanism Stage 14 of the tracing runbook already uses for
+the framework itself; the override is removed when the package is published.
+
+**Sequencing.** It must exist before the runbook's Stage 3, because Stage 3 composes the default
+propagator chain and needs to know what that chain does *not* include. It must be published before or
+alongside `0.7.0`, so `socia`'s dogfood runs against a published version rather than a local path.
 
 ---
 
@@ -111,9 +138,10 @@ offer to transfer makes the intent explicit.
 | | |
 |---|---|
 | **Target** | `dartastic_opentelemetry` — **but ask before writing anything** |
-| **Status** | `identified` (2026-07-30) |
+| **Status** | `asked` — pending an answer |
 | **Confidence** | Lowest of the four, and not for technical reasons |
-| **Blocked on** | A maintainer's answer to a question we have not yet asked. |
+| **Asked on** | 2026-07-30 |
+| **Next review** | **2026-08-30**, then quarterly. No answer is itself an answer; see below. |
 
 **How we found it.** modular_api's server-side instrumentation is built on shelf (runbook Stages 5, 8,
 9). The open-source Dart SDK ships no HTTP server instrumentation, so ours is entirely ours.
@@ -127,10 +155,36 @@ instrumentation stays inside modular_api where it already works, and nothing is 
 wrong is writing it, opening a PR, and putting a maintainer in the position of declining work already
 done — or accepting work that undercuts their livelihood.
 
-**The question to ask, verbatim enough to reuse:** *"We maintain a Dart API framework with
-shelf-based OpenTelemetry instrumentation running in production. Would an OSS shelf instrumentation
-package be welcome in this project, or does it overlap with the Dartastic.io integrations in a way that
-makes it unwelcome? Happy either way — we would rather ask than assume."*
+**A question is not a contribution.** The "only offer what runs in production" rule governs *code*. Asking
+costs a maintainer thirty seconds and the answer shapes whether we write anything at all, so it goes out
+now rather than after `0.7.0`.
+
+**The question as sent:**
+
+> We maintain modular_api, a use-case-centric API framework for Dart, and we have just built
+> OpenTelemetry instrumentation for it on top of `dartastic_opentelemetry_api` — server spans over shelf,
+> per-middleware spans, client spans, and database spans at the contract level. It runs in production in a
+> financial cooperative's backend.
+>
+> Two questions, and we would rather ask than assume:
+>
+> 1. Would an open-source **shelf server instrumentation** package be welcome in this project? We noticed
+>    Dartastic.io advertises shelf among its integrations while the OSS SDK ships none, and we do not want
+>    to contribute something that cuts across how you fund the work. A "no thanks" is a perfectly good
+>    answer and we will simply keep it inside our framework.
+> 2. Separately and much smaller: would you take a **W3C `traceparent` propagator in the API package**?
+>    The specification places propagators at the API layer and the official Python package ships one in
+>    `opentelemetry-api`, but in Dart it is only in the SDK — so a library that instruments against the
+>    API alone cannot propagate context. We wrote one and would rather upstream it than keep a private
+>    copy. Same for an **in-memory span exporter** for tests, which both the TS and Python SDKs provide.
+>
+> Thanks for the work on this — the API package supporting web is what made it possible for us to depend
+> on it in a framework core.
+
+**Reading the silence.** Open-source maintainers owe nobody a reply, and this project is mid-donation with
+limited capacity. If there is no answer by the second review, treat it as an implicit "not now": keep the
+shelf instrumentation private, and consider opening #1 and #2 as small, self-contained PRs anyway, since
+those are additive to the API package and cheap to decline.
 
 ---
 
@@ -167,8 +221,28 @@ offer is more credible after a couple of merged patches anyway.
 
 ---
 
+## Decisions
+
+Kept separately from the log so the reasoning is findable, not buried in a diff.
+
+- **2026-07-30 — Contribute first, decide on maintainership later.** Entries #1 to #4 need only the
+  contributor commitment, which is bounded: a PR, a review cycle, done. Maintainership is ongoing and
+  public, and the failure mode that actually damages a project is volunteering and then going quiet.
+  So: do the contributions, measure how much time they really take, and revisit maintainership with
+  evidence rather than enthusiasm. The offer is also more credible after a couple of merged patches.
+  **Revisit:** once at least two of #1–#4 have been resolved either way.
+- **2026-07-30 — The Cloud Trace propagator gets its own repository** (`macss/opentelemetry_propagator_gcp`),
+  not a directory inside `modular_api`. Donation is the stated goal, and from its own repo that is a
+  single GitHub *Transfer ownership*; from a subdirectory it is history surgery. Full reasoning in entry #3.
+- **2026-07-30 — Questions go out immediately; code waits for production.** The "only offer what runs in
+  production" rule governs contributions, not conversations. Asking early means the answer may already be
+  in hand when we are ready to write.
+
 ## Log
 
 | Date | Entry | Change |
 |---|---|---|
 | 2026-07-30 | all | Created from the ADR-0005 tracing work. Four gaps identified, one repointed from dartastic to a standalone package after checking ecosystem convention. |
+| 2026-07-30 | #3 | Decided its own repository over a directory in this one; recorded version line 0.0.1 and the sequencing constraints against the tracing runbook. |
+| 2026-07-30 | #4 | Question drafted and sent, covering shelf instrumentation plus the two smaller API-package asks. Review 2026-08-30, then quarterly. |
+| 2026-07-30 | #5 | Recorded the contribute-first decision and when to revisit it. |
