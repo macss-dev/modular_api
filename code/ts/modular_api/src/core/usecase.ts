@@ -111,7 +111,7 @@ export abstract class Input {
   }
 
   toJson(): Record<string, unknown> {
-    const fields = getFieldMetadata(this.constructor as abstract new (...args: unknown[]) => unknown);
+    const fields = getFieldMetadata(this.constructor as abstract new (...args: never[]) => unknown);
     if (fields.length > 0) {
       return serializeFromMetadata(this as unknown as Record<string, unknown>, fields);
     }
@@ -124,7 +124,7 @@ export abstract class Input {
    * Derived automatically from `@Field` decorators when present.
    */
   toSchema(): Record<string, unknown> {
-    const fields = getFieldMetadata(this.constructor as abstract new (...args: unknown[]) => unknown);
+    const fields = getFieldMetadata(this.constructor as abstract new (...args: never[]) => unknown);
     if (fields.length > 0) {
       return buildSchemaFromMetadata(fields);
     }
@@ -144,7 +144,7 @@ export abstract class Input {
    */
   static validateJson(
     json: Record<string, unknown>,
-    targetClass: abstract new (...args: unknown[]) => unknown,
+    targetClass: abstract new (...args: never[]) => unknown,
   ): void {
     const fields = getFieldMetadata(targetClass);
     for (const field of fields) {
@@ -193,7 +193,7 @@ export abstract class Output {
   }
 
   toJson(): Record<string, unknown> {
-    const fields = getFieldMetadata(this.constructor as abstract new (...args: unknown[]) => unknown);
+    const fields = getFieldMetadata(this.constructor as abstract new (...args: never[]) => unknown);
     if (fields.length > 0) {
       return serializeFromMetadata(this as unknown as Record<string, unknown>, fields);
     }
@@ -201,7 +201,7 @@ export abstract class Output {
   }
 
   toSchema(): Record<string, unknown> {
-    const fields = getFieldMetadata(this.constructor as abstract new (...args: unknown[]) => unknown);
+    const fields = getFieldMetadata(this.constructor as abstract new (...args: never[]) => unknown);
     if (fields.length > 0) {
       return buildSchemaFromMetadata(fields);
     }

@@ -114,10 +114,10 @@ describe('GraphQL runtime integration', () => {
       }),
     });
 
-    await expect(api.serve({ port: 0 })).rejects.toMatchObject<Partial<PluginHostError>>({
+    await expect(api.serve({ port: 0 })).rejects.toMatchObject({
       code: 'PLUGIN_VALIDATION_FAILED',
       resourceId: 'graphql.catalog',
-    });
+    } satisfies Partial<PluginHostError>);
   });
 
   it('startup fails when executor capability is missing', async () => {
@@ -129,10 +129,10 @@ describe('GraphQL runtime integration', () => {
       }),
     });
 
-    await expect(api.serve({ port: 0 })).rejects.toMatchObject<Partial<PluginHostError>>({
+    await expect(api.serve({ port: 0 })).rejects.toMatchObject({
       code: 'PLUGIN_VALIDATION_FAILED',
       resourceId: 'missing.sql.read_executor',
-    });
+    } satisfies Partial<PluginHostError>);
   });
 
   it('startup fails when schema generation fails', async () => {
@@ -145,10 +145,10 @@ describe('GraphQL runtime integration', () => {
       }),
     });
 
-    await expect(api.serve({ port: 0 })).rejects.toMatchObject<Partial<PluginHostError>>({
+    await expect(api.serve({ port: 0 })).rejects.toMatchObject({
       code: 'PLUGIN_VALIDATION_FAILED',
       resourceId: 'graphql.schema',
-    });
+    } satisfies Partial<PluginHostError>);
   });
 
   it('startup fails when maxDepth is invalid', async () => {
@@ -161,10 +161,10 @@ describe('GraphQL runtime integration', () => {
       }),
     });
 
-    await expect(api.serve({ port: 0 })).rejects.toMatchObject<Partial<PluginHostError>>({
+    await expect(api.serve({ port: 0 })).rejects.toMatchObject({
       code: 'PLUGIN_VALIDATION_FAILED',
       resourceId: 'graphql.maxDepth',
-    });
+    } satisfies Partial<PluginHostError>);
   });
 
   it('startup fails when maxComplexity is invalid', async () => {
@@ -177,10 +177,10 @@ describe('GraphQL runtime integration', () => {
       }),
     });
 
-    await expect(api.serve({ port: 0 })).rejects.toMatchObject<Partial<PluginHostError>>({
+    await expect(api.serve({ port: 0 })).rejects.toMatchObject({
       code: 'PLUGIN_VALIDATION_FAILED',
       resourceId: 'graphql.maxComplexity',
-    });
+    } satisfies Partial<PluginHostError>);
   });
 
   it('startup fails when defaultLimit is invalid', async () => {
@@ -193,10 +193,10 @@ describe('GraphQL runtime integration', () => {
       }),
     });
 
-    await expect(api.serve({ port: 0 })).rejects.toMatchObject<Partial<PluginHostError>>({
+    await expect(api.serve({ port: 0 })).rejects.toMatchObject({
       code: 'PLUGIN_VALIDATION_FAILED',
       resourceId: 'graphql.defaultLimit',
-    });
+    } satisfies Partial<PluginHostError>);
   });
 
   it('startup fails when maxLimit is invalid', async () => {
@@ -209,10 +209,10 @@ describe('GraphQL runtime integration', () => {
       }),
     });
 
-    await expect(api.serve({ port: 0 })).rejects.toMatchObject<Partial<PluginHostError>>({
+    await expect(api.serve({ port: 0 })).rejects.toMatchObject({
       code: 'PLUGIN_VALIDATION_FAILED',
       resourceId: 'graphql.maxLimit',
-    });
+    } satisfies Partial<PluginHostError>);
   });
 
   it('startup fails when defaultLimit exceeds maxLimit', async () => {
@@ -226,10 +226,10 @@ describe('GraphQL runtime integration', () => {
       }),
     });
 
-    await expect(api.serve({ port: 0 })).rejects.toMatchObject<Partial<PluginHostError>>({
+    await expect(api.serve({ port: 0 })).rejects.toMatchObject({
       code: 'PLUGIN_VALIDATION_FAILED',
       resourceId: 'graphql.defaultLimit',
-    });
+    } satisfies Partial<PluginHostError>);
   });
 
   it('direct executor and capability id are mutually exclusive', () => {
