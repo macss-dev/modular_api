@@ -36,6 +36,25 @@ export interface TracingOptionsInit {
    * the framework has no business knowing — is produced here by the application.
    */
   readonly traceFieldFormatter?: TraceFieldFormatter;
+
+  /**
+   * Runs when the server closes, before the process goes away.
+   *
+   * **The framework offers the timing; the application decides what it means.** On a
+   * scale-to-zero platform this is the only window to flush queued spans before the
+   * container dies — but the provider belongs to the application, which may share it with
+   * a worker or a scheduled job still running. Tearing down a resource the framework did
+   * not create would be presumptuous, and `TracerProvider` in `@opentelemetry/api`
+   * exposes no shutdown at all: only `getTracer` (runbook D8 as revised).
+   *
+   * ```ts
+   * onShutdown: () => provider.shutdown(),
+   * ```
+   *
+   * A callback that rejects is swallowed: losing telemetry is bad, failing to stop the
+   * server is worse.
+   */
+  readonly onShutdown?: () => Promise<void>;
 }
 
 /**
@@ -55,6 +74,7 @@ export class TracingOptions {
   readonly trustIncomingTraceContext: boolean;
   readonly instrumentationName: string;
   readonly traceFieldFormatter?: TraceFieldFormatter;
+  readonly onShutdown?: () => Promise<void>;
   private readonly propagators?: readonly TextMapPropagator<unknown>[];
 
   constructor(init: TracingOptionsInit) {
@@ -63,6 +83,7 @@ export class TracingOptions {
     this.trustIncomingTraceContext = init.trustIncomingTraceContext ?? true;
     this.instrumentationName = init.instrumentationName ?? 'modular_api';
     this.traceFieldFormatter = init.traceFieldFormatter;
+    this.onShutdown = init.onShutdown;
   }
 
   /** The propagation policy these options describe. */
