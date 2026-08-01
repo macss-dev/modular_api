@@ -991,5 +991,16 @@ if ($script:failedTests -eq 0) {
 
 Write-Host "──────────────────────────────────────────────────────────────`n" -ForegroundColor Magenta
 
+# ── Span-shape parity (Gate G6) ──────────────────────────────────────────────
+
+# Chained rather than folded in: this suite's structure is "three servers up,
+# compare HTTP responses", while span shape needs "three subprocesses, compare
+# stdout" — no ports, no long-running servers. Kept separate so the tracing check
+# can run on its own, and invoked here so one command still covers both.
+Write-Host "=== Handing off to tracing_parity_test.ps1 (G6) ===`n" -ForegroundColor Cyan
+
+& (Join-Path $PSScriptRoot 'tracing_parity_test.ps1')
+$tracingFailures = $LASTEXITCODE
+
 # Exit with non-zero if any test failed — useful for CI pipelines.
-exit $script:failedTests
+exit ($script:failedTests + $tracingFailures)
