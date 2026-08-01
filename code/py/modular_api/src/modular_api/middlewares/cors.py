@@ -65,7 +65,8 @@ def cors_middleware(
             # For all other requests, intercept the response to inject headers
             async def send_with_cors(message: Any) -> None:
                 if message["type"] == "http.response.start":
-                    headers = dict(scope.get("_cors_headers", []))
+                    # `dict(scope.get("_cors_headers", []))` used to be built here and never read. No
+                    # code writes that scope key either, so it was dead in both directions.
                     raw_headers: list[tuple[bytes, bytes]] = list(message.get("headers", []))
                     raw_headers.append((b"access-control-allow-origin", resolved_origin.encode()))
                     raw_headers.append((b"access-control-allow-methods", methods.encode()))

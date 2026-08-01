@@ -6,7 +6,6 @@ import re
 
 from modular_api.graphql.catalog import (
     GraphqlCatalog,
-    GraphqlCatalogField,
     GraphqlCatalogFieldVisibility,
     GraphqlCatalogRelationCardinality,
     GraphqlPublishedObject,

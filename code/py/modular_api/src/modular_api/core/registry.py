@@ -42,7 +42,7 @@ class UseCaseRegistration:
     method: str  # uppercase: "POST" | "GET" | "PUT" | "PATCH" | "DELETE"
     path: str  # e.g. "/api/v1/greetings/hello-world"
     factory: UseCaseFactory
-    schemas: dict[str, dict[str, Any]] = field(default_factory=dict)
+    schemas: dict[str, dict[str, Any]] = field(default_factory=dict[str, dict[str, Any]])
     doc: UseCaseDocMeta | None = None
 
 

@@ -37,7 +37,13 @@ from modular_api.core.metrics.metric import Counter, Gauge, Histogram
 from modular_api.core.metrics.metric_registry import MetricRegistry, MetricsRegistrar
 from modular_api.core.module_builder import ModuleBuilder
 from modular_api.core.official_plugins import build_runtime_plugins, operational_route_paths
-from modular_api.core.plugin import Plugin, PluginHostError, RuntimePluginHost, order_plugins
+from modular_api.core.plugin import (
+    Plugin,
+    PluginHostError,
+    PluginValidationResult,
+    RuntimePluginHost,
+    order_plugins,
+)
 from modular_api.core.registry import api_registry
 from modular_api.graphql.runtime import GraphqlOptions
 
@@ -196,7 +202,7 @@ class ModularApi:
                     plugin_host.end_plugin_setup()
                 plugin_host.on_shutdown(plugin.shutdown)
             plugin_host.freeze()
-            validation_results = []
+            validation_results: list[PluginValidationResult] = []
             for plugin in ordered_plugins:
                 validation_results.extend(plugin.validate(plugin_host))
             plugin_host.assert_valid(validation_results)

@@ -358,18 +358,19 @@ def _parse_fields(
             )
             continue
 
+        field_map = cast("dict[str, Any]", field_value)
         _collect_unknown_keys(
-            map_=dict(field_value),
+            map_=dict(field_map),
             allowed_keys={"hidden", "sensitive", "noFilter", "noSort", "name"},
             diagnostics=diagnostics,
             object_id=object_id,
         )
         fields[field_name] = GraphqlFieldMetadata(
-            hidden=_read_optional_bool(field_value, "hidden", diagnostics, object_id, field_name),
-            sensitive=_read_optional_bool(field_value, "sensitive", diagnostics, object_id, field_name),
-            no_filter=_read_optional_bool(field_value, "noFilter", diagnostics, object_id, field_name),
-            no_sort=_read_optional_bool(field_value, "noSort", diagnostics, object_id, field_name),
-            name=_read_optional_string(field_value, "name", diagnostics, object_id),
+            hidden=_read_optional_bool(field_map, "hidden", diagnostics, object_id, field_name),
+            sensitive=_read_optional_bool(field_map, "sensitive", diagnostics, object_id, field_name),
+            no_filter=_read_optional_bool(field_map, "noFilter", diagnostics, object_id, field_name),
+            no_sort=_read_optional_bool(field_map, "noSort", diagnostics, object_id, field_name),
+            name=_read_optional_string(field_map, "name", diagnostics, object_id),
         )
 
     return fields
@@ -395,7 +396,7 @@ def _parse_relations(
         return ()
 
     relations: list[GraphqlRelationMetadata] = []
-    for entry in value:
+    for entry in cast("list[object]", value):
         if not isinstance(entry, dict):
             diagnostics.append(
                 GraphqlMetadataDiagnostic(
@@ -408,18 +409,27 @@ def _parse_relations(
             )
             continue
 
+        entry_map = cast("dict[str, Any]", entry)
         _collect_unknown_keys(
-            map_=dict(entry),
+            map_=dict(entry_map),
             allowed_keys={"name", "cardinality", "target", "via"},
             diagnostics=diagnostics,
             object_id=object_id,
         )
+        # `via` is only read when it really is an array. The previous form put that check inside the
+        # comprehension's `if`, so it tested the container once per item and dropped every item when the
+        # test failed — the same result, reached by filtering items on a property of their container.
+        via_value = entry_map.get("via")
         relations.append(
             GraphqlRelationMetadata(
-                name=str(entry.get("name", "")),
-                cardinality=str(entry.get("cardinality", "")),
-                target=str(entry.get("target", "")),
-                via=tuple(str(item) for item in entry.get("via", []) if isinstance(entry.get("via", []), list)),
+                name=str(entry_map.get("name", "")),
+                cardinality=str(entry_map.get("cardinality", "")),
+                target=str(entry_map.get("target", "")),
+                via=(
+                    tuple(str(item) for item in cast("list[Any]", via_value))
+                    if isinstance(via_value, list)
+                    else ()
+                ),
             )
         )
 
@@ -447,8 +457,9 @@ def _parse_limit(
         )
         return None
 
-    default_value = value.get("default")
-    max_value = value.get("max")
+    limit_map = cast("dict[str, Any]", value)
+    default_value = limit_map.get("default")
+    max_value = limit_map.get("max")
     if not isinstance(default_value, int) or not isinstance(max_value, int):
         diagnostics.append(
             GraphqlMetadataDiagnostic(
