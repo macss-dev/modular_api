@@ -1,0 +1,12 @@
+# The `integration` tag marks tests that need infrastructure running — today the OpenTelemetry
+# Collector from `code/infra/docker`. They are skipped by default so `dart test` stays hermetic and
+# fast, and are opted into with:
+#
+#     dart test --run-skipped test/tracing/collector_integration_test.dart
+#
+# Skipped rather than excluded via a preset: `exclude_tags` inside a preset (with `default_presets`)
+# was tried and had no effect, while a top-level `exclude_tags` wins over `--tags` and leaves no way
+# to run them at all. A declared skip is the one form the runner honours in both directions.
+tags:
+  integration:
+    skip: 'needs the OTel Collector — run with `dart test --run-skipped <file>`'
