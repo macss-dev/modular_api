@@ -28,8 +28,10 @@ from .db_client import (
     DbTransactionContext,
     DbTransactionRunner,
 )
+from .db_tracing import DbTracingOptions, trace_db_client
 
 __all__ = [
+    "DbTracingOptions",
     "DbClient",
     "DbCommand",
     "DbCommandExecutor",
@@ -56,4 +58,5 @@ __all__ = [
     "DbSessionProvider",
     "DbTransactionContext",
     "DbTransactionRunner",
+    "trace_db_client",
 ]
