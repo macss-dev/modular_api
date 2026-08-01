@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-08-01
+
+- **`trace_id` changes shape when tracing is configured.** Without `tracing` it stays a dashed UUID
+  v4, exactly as before; with `tracing` it becomes the 32-hex W3C trace id of the server span, which
+  is what a trace backend can join on. The change is **gated on adopting tracing** so that consumers
+  who do not ask for it are unaffected. Check any query, dashboard or alert that assumes the dashed
+  form — see [the observability guide](../../../docs/guides/observability.md#the-trace_id-shape-change)
+- add distributed tracing: `tracing: TracingOptions(tracerProvider: ...)` on the `ModularApi`
+  constructor. Absent means no spans, no propagation and no cost — there is no `tracingEnabled`
+  boolean, so "off" cannot be misconfigured
+- the framework **instruments**, the application **supplies the OTel SDK**. Core now declares the
+  OpenTelemetry **API** as a direct dependency and will never declare an SDK, exporter, gRPC or
+  protobuf; a test enforces that boundary. The API is no-op without an SDK, so tracing costs nothing
+  until you configure a provider (ADR-0005 amendment A1/A2)
+- the server span is opened by the host **outside every plugin middleware slot**, and made ambient,
+  so a use case or satellite package reaches it with nothing threaded through any signature
+- add `span_id` and `request_id` to log lines. `request_id` carries the client's `X-Request-ID`
+  verbatim and is **never** used as the trace id and never invented: a retried request reuses its
+  request id on purpose, so one request id can span several traces
+- add a propagation chain, first-valid-wins: W3C `traceparent`/`tracestate`, then
+  `X-Cloud-Trace-Context` so a trace started by a Google load balancer is not orphaned.
+  `X-Cloud-Trace-Context` is **read** by default and **written** only when asked — the framework
+  emits open formats and nothing vendor-specific
+- add `trustIncomingTraceContext` (default `true`); set it `false` at an internet-facing edge, where
+  a caller controlling `traceparent` controls which trace their request joins
+- add `traceFieldFormatter`, the hook through which a platform correlation field such as
+  `logging.googleapis.com/trace` reaches log lines. No vendor field is emitted by default, because
+  the value needs a project id the framework does not know
+- add `onShutdown`, invoked when the server closes. The framework owns the *timing*, the application
+  owns the resource — it never shuts down or flushes a provider it did not create. On a scale-to-zero
+  platform this is the only window a batching processor has to flush
+- operational routes (health, docs, openapi, metrics) produce **no span**; the exclusion list is
+  derived from the same source as the routes rather than hardcoded
+- **tracing is not a plugin and has no endpoint.** The span must sit outside every plugin middleware
+  slot, while a plugin registers *into* one by definition (ADR-0005 amendment A7)
+- `duration_ms` is now slightly smaller than the server span, because tracing is the outermost layer
+  and logging sits inside it. Expected, not a regression
+- **TypeScript only:** call `provider.register()` when configuring the SDK. Without a registered
+  context manager `context.with` does not propagate and every child span silently becomes a root —
+  you get spans, they just are not a trace
+
 ## [0.6.1] - 2026-07-02
 
 ### Added
