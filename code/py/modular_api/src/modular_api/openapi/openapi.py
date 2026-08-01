@@ -12,12 +12,19 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, cast
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeAlias, cast
 
 from starlette.requests import Request
 from starlette.responses import Response
 
 from modular_api.core.registry import UseCaseRegistration, api_registry
+
+
+# What all three endpoint factories in this package return: a Starlette endpoint. `swagger_docs_handler`
+# used to say `object`, which no consumer can hand to `Route(...)` without a cast, and the other two said
+# `Any`, which says nothing. This is the type the closures actually have.
+StarletteEndpoint: TypeAlias = Callable[[Request], Awaitable[Response]]
 
 
 def build_openapi_spec(
@@ -54,7 +61,7 @@ def build_openapi_spec(
 # ── Endpoint factories ────────────────────────────────────────
 
 
-def openapi_json_handler(*, title: str, port: int, **kwargs: Any) -> Any:
+def openapi_json_handler(*, title: str, port: int, **kwargs: Any) -> StarletteEndpoint:
     """Return a Starlette endpoint that serves the OpenAPI spec as JSON."""
 
     async def endpoint(request: Request) -> Response:
@@ -67,7 +74,7 @@ def openapi_json_handler(*, title: str, port: int, **kwargs: Any) -> Any:
     return endpoint
 
 
-def openapi_yaml_handler(*, title: str, port: int, **kwargs: Any) -> Any:
+def openapi_yaml_handler(*, title: str, port: int, **kwargs: Any) -> StarletteEndpoint:
     """Return a Starlette endpoint that serves the OpenAPI spec as YAML."""
 
     async def endpoint(request: Request) -> Response:

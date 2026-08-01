@@ -198,6 +198,7 @@ def test_parses_field_relation_and_limit_overrides_into_strongly_typed_metadata(
     assert customer.limit is not None
     assert customer.limit.default_value == 25
     assert customer.limit.max_value == 100
+    assert customer.fields is not None
     assert tuple(customer.fields.keys()) == ("CustomerCode", "FullName")
     assert customer.fields["CustomerCode"].hidden is True
     assert customer.fields["CustomerCode"].no_filter is True

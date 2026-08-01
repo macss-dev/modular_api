@@ -20,4 +20,9 @@ import asyncio
 import sys
 
 if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    # Deprecated in 3.14, removed in 3.16. Revisit when this project moves past 3.13: the
+    # replacement is a loop factory handed to the runner, which pytest-asyncio configures
+    # differently. Until then this is the mechanism that works.
+    asyncio.set_event_loop_policy(  # pyright: ignore[reportDeprecated]
+        asyncio.WindowsSelectorEventLoopPolicy()
+    )

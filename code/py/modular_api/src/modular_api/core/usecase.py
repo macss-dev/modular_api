@@ -15,6 +15,8 @@ from typing import Any, Generic, Self, TypeVar
 
 from pydantic import BaseModel
 
+from modular_api.core.logger.logger import ModularLogger
+
 
 def _reorder_type_first(prop: dict[str, Any]) -> dict[str, Any]:
     """Ensure ``type`` is the first key — matches Dart/TS property order."""
@@ -200,7 +202,12 @@ class UseCase(ABC, Generic[I, O]):
 
     # Request-scoped logger injected by the framework before execute().
     # Available inside execute(). None when running without middleware.
-    logger: object | None = None
+    #
+    # `ModularLogger | None`, not `object | None`: the framework always injects a logger that satisfies
+    # this protocol, and `object` made the one thing a use case does with it — `self.logger.info(...)` —
+    # fail to type-check. The `example/` use cases in this repo were the proof: they call it exactly as a
+    # consumer would. `PluginRequestContext.logger` already named the protocol.
+    logger: ModularLogger | None = None
 
     @property
     @abstractmethod

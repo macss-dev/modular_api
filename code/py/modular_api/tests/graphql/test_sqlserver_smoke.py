@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 import pytest
 
-pyodbc = pytest.importorskip("pyodbc")
+if TYPE_CHECKING:
+    import pyodbc
+else:
+    pyodbc = pytest.importorskip("pyodbc")
 
 
 def _connection_string() -> str:

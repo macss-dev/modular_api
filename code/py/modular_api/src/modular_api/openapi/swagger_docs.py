@@ -13,6 +13,8 @@ from __future__ import annotations
 from starlette.requests import Request
 from starlette.responses import HTMLResponse
 
+from modular_api.openapi.openapi import StarletteEndpoint
+
 _DOCS_UI_CDN = "https://cdn.jsdelivr.net/npm/@macss/docs-ui@0.1/dist"
 
 # {title} is the only placeholder — str.replace() is a literal match,
@@ -37,7 +39,7 @@ def build_swagger_docs_html(*, title: str, spec_url: str = "/openapi.json") -> s
     return _DOCS_UI_HTML_TEMPLATE.replace("{title}", title).replace("{spec_url}", spec_url)
 
 
-def swagger_docs_handler(*, title: str, spec_url: str = "/openapi.json") -> object:
+def swagger_docs_handler(*, title: str, spec_url: str = "/openapi.json") -> StarletteEndpoint:
     """Return a Starlette endpoint that serves a docs-ui HTML page.
 
     Usage::
