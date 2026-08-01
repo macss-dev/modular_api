@@ -2,6 +2,7 @@ import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart';
 import 'package:shelf/shelf.dart';
 
 import 'propagation_policy.dart';
+import 'server_span.dart';
 
 /// Context key under which the server span is exposed to downstream handlers.
 ///
@@ -16,12 +17,11 @@ const String propagationResultContextKey = 'modular.tracing.propagation';
 
 /// Creates the middleware that owns the server span.
 ///
-/// **Host-owned, not plugin-owned.** This is installed by the host immediately
-/// inside `loggingMiddleware` and therefore outside every plugin middleware, which
-/// is the whole point: a span created from inside a plugin slot would miss the
-/// plugin middleware registered before it, leaving a hole in the waterfall exactly
-/// where cold start and early middleware live. ADR-0005 decision 4 exists because
-/// the first draft of this design got that wrong.
+/// **Host-owned, not plugin-owned.** This is installed by the host outside every plugin
+/// middleware, which is the whole point: a span created from inside a plugin slot
+/// would miss the plugin middleware registered before it, leaving a hole in the
+/// waterfall exactly where cold start and early middleware live. ADR-0005
+/// decision 4 exists because the first draft of this design got that wrong.
 ///
 /// **Outermost, with `loggingMiddleware` inside it** (runbook D12 as reversed). The
 /// logger then runs within this span's active scope, so it reads `trace_id` and
@@ -33,6 +33,10 @@ const String propagationResultContextKey = 'modular.tracing.propagation';
 /// The span is made ambient with `withSpanAsync`, so everything downstream —
 /// use cases, database commands, outbound HTTP — can create child spans without
 /// anything being threaded through call signatures.
+///
+/// **This is an adapter, and only an adapter.** Span construction lives in
+/// `server_span.dart`, which knows nothing about HTTP or shelf, so the planned gRPC
+/// transport arrives as a second adapter rather than a second copy (gate G4).
 Middleware tracingMiddleware({
   required APITracer tracer,
   PropagationPolicy policy = const PropagationPolicy(),
@@ -48,52 +52,20 @@ Middleware tracingMiddleware({
       // list from operationalRoutePaths rather than hardcoding it.
       if (excluded.contains(path)) return innerHandler(request);
 
-      final method = request.method.toUpperCase();
-
-      final resolved = policy.resolve(request.headers);
-
-      final span = tracer.startSpan(
-        // Semantic convention for an HTTP server span: method then route.
-        '$method $path',
-        // `context`, never `spanContext`. The two are easy to confuse and the SDK
-        // treats them very differently: `spanContext` supplies the new span's own
-        // trace id, while the parent link is read from `context.spanContext`.
-        // Passing the resolved context as `spanContext` produced a span with the
-        // caller's trace id and no parent at all — a trace that looks plausible
-        // and is silently disconnected. Caught by the parenting test.
-        //
-        // Passing it explicitly rather than relying on `Context.current` also
-        // keeps this deterministic: the parent is whatever propagation resolved,
-        // not whatever happened to be ambient.
-        // `context` supplies the PARENT; `spanContext` would supply this span's own
-        // trace id. Only the parent is wanted here: the tracer generates the trace id
-        // for a root span, and the logger reads it back from the ambient span.
-        //
-        // An earlier design had the logger own the trace id and the span adopt it,
-        // which needed `spanContext` in Dart and could not be expressed in TypeScript
-        // without seeding a parent — where a seeded parent's trace flags made the
-        // sampler drop the span. Reversing D12 removed the need entirely.
-        //
-        // Passing the resolved context explicitly rather than relying on
-        // `Context.current` keeps parenting deterministic: the parent is whatever
-        // propagation resolved, never whatever happened to be ambient.
-        context: resolved.context,
-        kind: SpanKind.server,
-        attributes: OTelAPI.attributesFromMap(<String, Object>{
-          'http.request.method': method,
-          'url.path': path,
-          // The convention's name for a captured header, rather than an invented
-          // one, so a reader of the trace recognises it (D6).
-          if (resolved.requestId != null)
-            'http.request.header.x-request-id': resolved.requestId!,
-        }),
+      final started = startServerSpan(
+        tracer: tracer,
+        method: request.method,
+        route: path,
+        headers: request.headers,
+        policy: policy,
       );
+      final span = started.span;
 
       final enriched = request.change(
         context: <String, Object>{
           ...request.context,
           tracingSpanContextKey: span,
-          propagationResultContextKey: resolved,
+          propagationResultContextKey: started.propagation,
         },
       );
 
@@ -103,22 +75,11 @@ Middleware tracingMiddleware({
       return tracer.withSpanAsync(span, () async {
         try {
           final response = await innerHandler(enriched);
-
-          span.setIntAttribute('http.response.status_code', response.statusCode);
-
-          // 5xx is ours; 4xx is the caller's. Marking client mistakes as errors
-          // makes an error-rate panel useless.
-          if (response.statusCode >= 500) {
-            span.setStatus(SpanStatusCode.Error, 'HTTP ${response.statusCode}');
-          }
-
+          completeServerSpan(span, statusCode: response.statusCode);
           return response;
         } catch (error, stackTrace) {
-          span.recordException(error, stackTrace: stackTrace);
-          span.setStatus(SpanStatusCode.Error, error.runtimeType.toString());
+          completeServerSpan(span, error: error, stackTrace: stackTrace);
           rethrow;
-        } finally {
-          span.end();
         }
       });
     };

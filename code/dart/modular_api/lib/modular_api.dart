@@ -51,6 +51,10 @@ export 'src/core/tracing/w3c_trace_context_propagator.dart'
     show W3CTraceContextPropagator, traceparentHeader, tracestateHeader;
 export 'src/core/tracing/tracing_middleware.dart'
     show tracingSpanContextKey, propagationResultContextKey;
+// Transport-neutral span construction (gate G4). `tracingMiddleware` is a shelf adapter over
+// these; the planned gRPC transport is a second adapter, not a second implementation.
+export 'src/core/tracing/server_span.dart'
+    show ServerSpanStart, startServerSpan, completeServerSpan;
 
 // Health
 export 'src/core/health/health_check.dart'

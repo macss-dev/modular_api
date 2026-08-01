@@ -25,9 +25,10 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 from opentelemetry import trace
-from opentelemetry.trace import SpanKind, Status, StatusCode, Tracer
+from opentelemetry.trace import Tracer
 
 from modular_api.core.tracing.propagation_policy import PropagationPolicy
+from modular_api.core.tracing.server_span import record_server_status, start_server_span
 
 #: ``scope`` key under which the server span is exposed to downstream handlers.
 TRACING_SPAN_SCOPE_KEY = "modular_api.tracing.span"
@@ -73,40 +74,25 @@ def tracing_middleware(
                 for key, value in scope.get("headers", [])
             }
 
-            resolved = effective_policy.resolve(headers)
-
-            attributes: dict[str, Any] = {
-                "http.request.method": method,
-                "url.path": path,
-            }
-            if resolved.request_id is not None:
-                # The convention's name for a captured header, rather than an invented
-                # one, so a reader of the trace recognises it (D6).
-                attributes["http.request.header.x-request-id"] = resolved.request_id
-
-            span = tracer.start_span(
-                # Semantic convention for an HTTP server span: method then route.
-                f"{method} {path}",
-                # The parent comes from the resolved context, never from whatever
-                # happened to be ambient — the same determinism the siblings keep.
-                context=resolved.context,
-                kind=SpanKind.SERVER,
-                attributes=attributes,
+            started = start_server_span(
+                tracer=tracer,
+                method=method,
+                route=path,
+                headers=headers,
+                policy=effective_policy,
             )
+            span = started.span
+            resolved = started.propagation
 
             scope[TRACING_SPAN_SCOPE_KEY] = span
             scope[PROPAGATION_RESULT_SCOPE_KEY] = resolved
 
             async def send_wrapper(message: dict[str, Any]) -> None:
-                # The response arrives as messages rather than as a return value, so
-                # the status is read here.
+                # The response arrives as messages rather than as a return value, so the status is
+                # read here. This is the one place the three languages genuinely diverge: shelf hands
+                # back a response, Express fires an event, ASGI streams messages.
                 if message["type"] == "http.response.start":
-                    status = int(message["status"])
-                    span.set_attribute("http.response.status_code", status)
-                    if status >= 500:
-                        # 5xx is ours; 4xx is the caller's. Marking client mistakes as
-                        # errors makes an error-rate panel useless.
-                        span.set_status(Status(StatusCode.ERROR, f"HTTP {status}"))
+                    record_server_status(span, int(message["status"]))
                 await send(message)
 
             # use_span activates the span through contextvars, records an exception,

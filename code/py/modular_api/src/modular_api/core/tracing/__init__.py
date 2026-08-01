@@ -15,6 +15,14 @@ from modular_api.core.tracing.propagation_policy import (
     PropagationPolicy,
     PropagationResult,
 )
+# Transport-neutral span construction (gate G4). ``tracing_middleware`` is an ASGI adapter over
+# these; the planned gRPC transport is a second adapter, not a second implementation.
+from modular_api.core.tracing.server_span import (
+    ServerSpanStart,
+    complete_server_span,
+    record_server_status,
+    start_server_span,
+)
 from modular_api.core.tracing.tracing_middleware import (
     PROPAGATION_RESULT_SCOPE_KEY,
     TRACING_SPAN_SCOPE_KEY,
@@ -28,8 +36,12 @@ __all__ = [
     "PROPAGATION_RESULT_SCOPE_KEY",
     "TRACING_SPAN_SCOPE_KEY",
     "CloudTraceContextPropagator",
+    "ServerSpanStart",
     "PropagationPolicy",
     "PropagationResult",
     "TracingOptions",
+    "complete_server_span",
+    "record_server_status",
+    "start_server_span",
     "tracing_middleware",
 ]
