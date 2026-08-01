@@ -34,6 +34,9 @@ from modular_api.core.error_response_middleware import error_response_middleware
 from modular_api.core.health.health_service import HealthService
 from modular_api.core.logger.logger import LogLevel
 from modular_api.core.logger.logging_middleware import logging_middleware
+from opentelemetry.propagate import set_global_textmap
+from opentelemetry.propagators.composite import CompositeHTTPPropagator
+
 from modular_api.core.tracing.tracing_middleware import tracing_middleware
 from modular_api.core.tracing.tracing_options import TracingOptions
 from modular_api.core.metrics.metric import Counter, Gauge, Histogram
@@ -289,6 +292,20 @@ class ModularApi:
         # span. Absent options add nothing, which is what makes tracing free when it is off
         # (gate G3).
         if self._tracing is not None:
+            # Publish the chain as the global propagator, which is how satellite packages
+            # inject it. macss-modular-api-rest-client does not depend on this package
+            # (D21), so it cannot reach our propagator — and per the OpenTelemetry API's
+            # guidance it should not: instrumentation libraries read the global, the host
+            # sets it. That also means whatever chain the application configured is honoured
+            # on outbound calls, including a Cloud Trace propagator it appended.
+            propagators = list(self._tracing.policy.propagators)
+            if propagators:
+                set_global_textmap(
+                    propagators[0]
+                    if len(propagators) == 1
+                    else CompositeHTTPPropagator(propagators)
+                )
+
             app.add_middleware(
                 tracing_middleware(
                     tracer=self._tracing.tracer,
