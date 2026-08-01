@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from modular_api_graphql_client import GraphqlRequest, ServiceClientConfig, graphql_client
 
 
@@ -14,7 +16,7 @@ def main() -> None:
             document="query GetUsers { users { id } }",
             operation_name="GetUsers",
         ),
-        decoder=lambda value: dict(value or {}),
+        decoder=lambda value: dict(cast("dict[str, Any]", value or {})),
     )
 
     if result.is_success:
