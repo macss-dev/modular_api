@@ -16,7 +16,7 @@ const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8' };
 
 export interface UseCaseHandlerOptions {
   /** Input class for pre-validation before fromJson (enables strict factories). */
-  inputClass?: abstract new (...args: unknown[]) => Input;
+  inputClass?: abstract new (...args: never[]) => Input;
 }
 
 /**
@@ -65,7 +65,7 @@ export function useCaseHandler<I extends Input, O extends Output>(
       if (!options.inputClass) {
         Input.validateJson(
           data,
-          useCase.input.constructor as abstract new (...args: unknown[]) => unknown,
+          useCase.input.constructor as abstract new (...args: never[]) => unknown,
         );
       }
 

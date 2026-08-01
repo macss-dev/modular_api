@@ -20,8 +20,12 @@
  * connection attempt rather than one per test.
  */
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
 
-const require = createRequire(import.meta.url);
+// Resolved from the working directory rather than `import.meta.url`: this package compiles with
+// `module: commonjs`, where `import.meta` is a hard compile error (TS1343). vitest never typechecks,
+// so nothing surfaced it until `tsc --noEmit` became part of `npm test`.
+const require = createRequire(join(process.cwd(), 'package.json'));
 
 export type SqlRequestLike = {
   query<Row extends object>(query: string): Promise<{ recordset: Row[] }>;
