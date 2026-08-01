@@ -10,6 +10,9 @@ import type { HealthCheck } from './health/health_check';
 import { HealthService } from './health/health_service';
 import { MetricRegistry, MetricsRegistrar } from './metrics/metric_registry';
 import { loggingMiddleware } from './logger/logging_middleware';
+import { propagation, type TextMapPropagator } from '@opentelemetry/api';
+
+import { CompositeTextMapPropagator } from './tracing/compositePropagator';
 import { tracingMiddleware } from './tracing/tracingMiddleware';
 import { TracingOptions } from './tracing/tracingOptions';
 import { LogLevel } from './logger/logger';
@@ -318,6 +321,22 @@ export class ModularApi {
       // (gate G3).
       const tracing = this.tracing;
       if (tracing !== undefined) {
+        // Publish the chain as the global propagator, which is how satellite packages
+        // inject it. @macss/modular-api-rest-client does not depend on this package (D21),
+        // so it cannot reach our W3C propagator — and per the OpenTelemetry API's guidance
+        // it should not: instrumentation libraries read the global, the host sets it.
+        //
+        // That indirection also means whatever chain the application configured is honoured
+        // on outbound calls, including a Cloud Trace propagator it appended.
+        const propagators = tracing.policy.propagators;
+        if (propagators.length > 0) {
+          propagation.setGlobalPropagator(
+            propagators.length === 1
+              ? (propagators[0] as TextMapPropagator)
+              : new CompositeTextMapPropagator(propagators),
+          );
+        }
+
         this.app.use(
           tracingMiddleware({
             tracer: tracing.tracer,

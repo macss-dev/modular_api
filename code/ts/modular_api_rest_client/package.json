@@ -31,8 +31,13 @@
   },
   "homepage": "https://github.com/ccisnedev/modular_api/tree/main/code/ts/modular_api_rest_client#readme",
   "devDependencies": {
+    "@opentelemetry/core": "^2.10.0",
+    "@opentelemetry/sdk-trace-node": "^2.10.0",
     "@types/node": "^22.19.11",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0"
   }
 }
