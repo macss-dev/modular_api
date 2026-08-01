@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
  * (D22).
  */
 const manifest = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),
+  readFileSync(join(process.cwd(), 'package.json'), 'utf8'),
 ) as { dependencies?: Record<string, string> };
 
 const dependencies = manifest.dependencies ?? {};
