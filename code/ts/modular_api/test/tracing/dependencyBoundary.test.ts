@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -24,7 +24,10 @@ import { describe, expect, it } from 'vitest';
  *   the SDK is legitimate — it does not ship to consumers, and the official
  *   in-memory span exporter used by tests lives there.
  */
-const manifestPath = fileURLToPath(new URL('../../package.json', import.meta.url));
+// Resolved from the working directory rather than `import.meta.url`: this package compiles with
+// `module: commonjs`, where `import.meta` is a hard compile error (TS1343) that vitest does not
+// surface because it never typechecks. The Dart guard has always read its pubspec this way.
+const manifestPath = join(process.cwd(), 'package.json');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;

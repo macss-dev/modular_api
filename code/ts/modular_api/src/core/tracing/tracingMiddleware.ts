@@ -1,14 +1,8 @@
-import {
-  context as otelContext,
-  SpanKind,
-  SpanStatusCode,
-  trace,
-  type Span,
-  type Tracer,
-} from '@opentelemetry/api';
+import { context as otelContext, trace, type Tracer } from '@opentelemetry/api';
 import type { RequestHandler } from 'express';
 
-import { PropagationPolicy, type PropagationResult } from './propagationPolicy';
+import { PropagationPolicy } from './propagationPolicy';
+import { completeServerSpan, startServerSpan } from './serverSpan';
 
 /** Property under which the server span is exposed on `res.locals`. */
 export const TRACING_SPAN_LOCAL = 'modularTracingSpan';
@@ -46,6 +40,10 @@ export interface TracingMiddlewareOptions {
  * application's SDK registers. Without one it degrades to a passthrough: child
  * spans created downstream become roots instead of children, rather than failing.
  * The wiring recipe in the observability guide covers this.
+ *
+ * **This is an adapter, and only an adapter.** Span construction lives in `serverSpan.ts`, which
+ * knows nothing about HTTP or Express, so the planned gRPC transport arrives as a second adapter
+ * rather than a second copy (gate G4).
  */
 export function tracingMiddleware(options: TracingMiddlewareOptions): RequestHandler {
   const { tracer } = options;
@@ -60,30 +58,13 @@ export function tracingMiddleware(options: TracingMiddlewareOptions): RequestHan
       return;
     }
 
-    const method = req.method.toUpperCase();
-
-    const resolved: PropagationResult = policy.resolve(req.headers as Record<string, string>);
-
-    const span = tracer.startSpan(
-      // Semantic convention for an HTTP server span: method then route.
-      `${method} ${req.path}`,
-      {
-        kind: SpanKind.SERVER,
-        attributes: {
-          'http.request.method': method,
-          'url.path': req.path,
-          // The convention's name for a captured header, rather than an invented
-          // one, so a reader of the trace recognises it (D6).
-          ...(resolved.requestId === undefined
-            ? {}
-            : { 'http.request.header.x-request-id': resolved.requestId }),
-        },
-      },
-      // The parent comes from the resolved context, never from whatever happened to
-      // be ambient — the same determinism the Dart version keeps.
-      //
-      resolved.context,
-    );
+    const { span, propagation: resolved } = startServerSpan({
+      tracer,
+      method: req.method,
+      route: req.path,
+      headers: req.headers as Record<string, string>,
+      policy,
+    });
 
     res.locals[TRACING_SPAN_LOCAL] = span;
     res.locals[PROPAGATION_RESULT_LOCAL] = resolved;
@@ -92,18 +73,7 @@ export function tracingMiddleware(options: TracingMiddlewareOptions): RequestHan
     const endSpan = (aborted: boolean) => {
       if (ended) return;
       ended = true;
-
-      span.setAttribute('http.response.status_code', res.statusCode);
-
-      if (aborted) {
-        span.setStatus({ code: SpanStatusCode.ERROR, message: 'client disconnected' });
-      } else if (res.statusCode >= 500) {
-        // 5xx is ours; 4xx is the caller's. Marking client mistakes as errors makes
-        // an error-rate panel useless.
-        span.setStatus({ code: SpanStatusCode.ERROR, message: `HTTP ${res.statusCode}` });
-      }
-
-      span.end();
+      completeServerSpan(span, { statusCode: res.statusCode, aborted });
     };
 
     res.on('finish', () => endSpan(false));

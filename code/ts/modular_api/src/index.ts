@@ -86,6 +86,14 @@ export {
   TRACING_SPAN_LOCAL,
   PROPAGATION_RESULT_LOCAL,
 } from './core/tracing/tracingMiddleware';
+// Transport-neutral span construction (gate G4). `tracingMiddleware` is an Express adapter over
+// these; the planned gRPC transport is a second adapter, not a second implementation.
+export { startServerSpan, completeServerSpan } from './core/tracing/serverSpan';
+export type {
+  ServerSpanStart,
+  StartServerSpanOptions,
+  CompleteServerSpanOptions,
+} from './core/tracing/serverSpan';
 
 // OpenAPI — Raw spec endpoints
 export {
