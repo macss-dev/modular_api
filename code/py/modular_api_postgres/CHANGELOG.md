@@ -2,6 +2,14 @@
 
 ## 0.7.0
 
+- **`trace_id` changes shape when tracing is configured.** Without `tracing` it stays a dashed UUID
+  v4, exactly as before; with `tracing` it becomes the 32-hex W3C trace id of the server span, which
+  is what a trace backend can join on. The change is **gated on adopting tracing** so that consumers
+  who do not ask for it are unaffected. Check any query, dashboard or alert that assumes the dashed
+  form — see
+  [the observability guide](../../../docs/guides/observability.md#the-trace_id-shape-change). This
+  package does not emit that field itself; the note is here because a synchronized release moves all
+  packages together
 - add database spans: `trace_db_client(client)` wraps a `DbClient` so its commands, transactions and
   session acquisitions produce OpenTelemetry spans
 - instrumentation is a decorator over the contract, not a change to `DbClient` — wrapping the

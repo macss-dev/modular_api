@@ -1,6 +1,6 @@
 {
   "name": "@macss/modular-api-graphql-client",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": false,
   "description": "Official MACSS outbound GraphQL client for TypeScript.",
   "main": "dist/index.js",

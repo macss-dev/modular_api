@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0
+
+- version bump for cross-SDK parity (ADR-0002); no functional changes
+
 ## 0.6.0
 
 - add typed command parameters via `DbParameter` (name, value, direction input/output/inputOutput, free-form `typeHint`) with `input`/`output`/`inputOutput` helpers

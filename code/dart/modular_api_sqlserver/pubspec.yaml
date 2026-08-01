@@ -1,6 +1,6 @@
 name: modular_api_sqlserver
 description: Official MACSS SQL Server integration package for Dart.
-version: 0.6.0
+version: 0.7.0
 
 repository: https://github.com/macss-dev/modular_api/tree/main/code/dart/modular_api_sqlserver
 homepage: https://github.com/macss-dev/modular_api
