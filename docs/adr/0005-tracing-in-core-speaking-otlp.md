@@ -226,6 +226,27 @@ collapses too: the SDK exists, it is web-safe, and it is on its way to becoming 
   instrumentation for shelf, and an in-memory span exporter for tests. Having a voice in a
   specification we consume is worth more than the insulation an in-house contract would buy.
 
+- **A7 — There is no tracing plugin, and decision 4's "official plugin owns configuration, sampler,
+  span processor, exporter and lifecycle" describes nothing that exists.** Added 2026-07-30. Each of
+  those five responsibilities was reassigned by a later decision: A2 moved the sampler, processor and
+  exporter to the application; decision 4's own correction made the span host-owned, so no middleware
+  is registered; the shutdown became a callback the application supplies (runbook D8 as revised,
+  because the OpenTelemetry API exposes no provider shutdown in TypeScript or Python); and the
+  dropped-span counter was removed entirely (runbook D14).
+
+  What remained was a plugin whose `setup()` did nothing and whose only act was forwarding one
+  callback. The host reads `TracingOptions` directly instead.
+
+  The deeper reason it never fit: every official plugin exists to add an **HTTP surface**, and the
+  plugin contract's four powers are route registration, middleware registration, boot validation and
+  shutdown. Tracing has no endpoint; it *cannot* register middleware, because the span must sit
+  outside every plugin slot; it has nothing to validate; and its shutdown is one line in the host.
+  **Invariant 2 constrains how official plugins are built, not what must be a plugin.**
+
+  A finding worth carrying forward: the plugin contract cannot express "outermost middleware", so no
+  third party can build cross-cutting instrumentation today. That is a candidate for a plugin-host
+  ADR, and it surfaced only because tracing was attempted as a plugin.
+
 **What this costs, stated plainly:** invariant 1 ("the core stays minimal") absorbs one direct and
 four transitive dependencies where the original plan added none. That is the price of correctness by
 oracle instead of correctness by self-agreement, and of not maintaining a specification
