@@ -293,7 +293,25 @@ class ModularApi {
       ip ?? InternetAddress.anyIPv4,
       port,
     );
-    final managedServer = _ManagedHttpServer(server, pluginHost.shutdown);
+    // Tracing's shutdown callback runs alongside the plugin host's, not as a plugin.
+    //
+    // There is deliberately NO tracing plugin. Every responsibility ADR-0005 decision 4
+    // gave one was reassigned by a later decision: A2 moved the sampler, processor and
+    // exporter to the application; decision 4 itself made the span host-owned so no
+    // middleware is registered; and D8 as revised turned provider shutdown into a callback
+    // the application supplies. A plugin whose setup() does nothing and whose only act is
+    // to forward one callback is indirection with no reader benefit.
+    final tracingShutdown = tracing?.onShutdown;
+    final managedServer = _ManagedHttpServer(server, () async {
+      if (tracingShutdown != null) {
+        try {
+          await tracingShutdown();
+        } catch (_) {
+          // Losing telemetry is bad; failing to stop the server is worse.
+        }
+      }
+      await pluginHost.shutdown();
+    });
 
     /// Print info
     stdout.writeln('Docs on http://localhost:${managedServer.port}${operationalPaths.docsPath}');

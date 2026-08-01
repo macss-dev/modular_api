@@ -48,6 +48,7 @@ class TracingOptions {
     this.trustIncomingTraceContext = true,
     this.instrumentationName = 'modular_api',
     this.traceFieldFormatter,
+    this.onShutdown,
   }) : _propagators = propagators;
 
   /// The application's tracer provider.
@@ -60,6 +61,24 @@ class TracingOptions {
 
   /// The instrumentation scope name reported to the backend.
   final String instrumentationName;
+
+  /// Runs when the server closes, before the process goes away.
+  ///
+  /// **The framework offers the timing; the application decides what it means.** On a
+  /// scale-to-zero platform this is the only window to flush queued spans before the
+  /// container dies, so it matters — but the provider belongs to the application, which
+  /// may share it with a worker or a scheduled job that is still running. Tearing down a
+  /// resource the framework did not create would be presumptuous, and it is not even
+  /// expressible in TypeScript or Python, whose OpenTelemetry APIs expose no shutdown on
+  /// the provider at all (runbook D8 as revised).
+  ///
+  /// ```dart
+  /// onShutdown: () => provider.shutdown(),
+  /// ```
+  ///
+  /// A callback that throws is logged and swallowed: losing telemetry is bad, failing to
+  /// stop the server is worse.
+  final Future<void> Function()? onShutdown;
 
   /// Builds platform-specific log correlation fields, or `null` for none.
   ///
