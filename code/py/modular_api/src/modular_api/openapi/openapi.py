@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, cast
 
 from starlette.requests import Request
 from starlette.responses import Response
@@ -200,6 +200,26 @@ def _yaml_key(key: str) -> str:
     return key
 
 
+def _as_mapping(value: object) -> dict[object, object] | None:
+    """The value as a mapping when it is one, otherwise ``None``.
+
+    Paired with ``_is_container`` for the same reason: an ``isinstance`` in the caller narrows the value
+    in place for the rest of the block, and the narrowed form of an untyped container is what turns the
+    later calls' argument types unknown. Narrowing inside a function keeps it out of the caller.
+    """
+    return cast("dict[object, object]", value) if isinstance(value, dict) else None
+
+
+def _is_container(value: object) -> bool:
+    """Whether a JSON-decoded value nests, i.e. needs a recursive render rather than a scalar one.
+
+    A predicate rather than an inline ``isinstance``: inlining narrows the value to an unparameterised
+    ``dict``/``list``, and passing that narrowed value straight back into ``json_to_yaml`` — which takes
+    ``object`` — is what made the element type unknown at four call sites.
+    """
+    return isinstance(value, (dict, list))
+
+
 def _yaml_scalar(value: object) -> str:
     """Render a YAML scalar (string, number, bool, None)."""
     if value is None:
@@ -226,8 +246,9 @@ def json_to_yaml(value: object, *, _indent: int = 0, _is_root: bool = True) -> s
         if not value:
             return "{}\n"
         result = "" if _is_root else "\n"
-        for k, v in value.items():
-            if isinstance(v, (dict, list)):
+        # JSON-decoded data: the guard establishes the container, the cast carries it to the reads.
+        for k, v in cast("dict[object, object]", value).items():
+            if _is_container(v):
                 result += f"{pad}{_yaml_key(str(k))}:{json_to_yaml(v, _indent=_indent + 1, _is_root=False)}"
             else:
                 result += f"{pad}{_yaml_key(str(k))}: {_yaml_scalar(v)}\n"
@@ -237,17 +258,18 @@ def json_to_yaml(value: object, *, _indent: int = 0, _is_root: bool = True) -> s
         if not value:
             return "[]\n"
         result = "" if _is_root else "\n"
-        for item in value:
-            if isinstance(item, dict) and item:
+        for item in cast("list[object]", value):
+            item_map = _as_mapping(item)
+            if item_map:
                 first = True
-                for k, v in item.items():
+                for k, v in item_map.items():
                     prefix = f"{pad}- " if first else f"{pad}  "
                     first = False
-                    if isinstance(v, (dict, list)):
+                    if _is_container(v):
                         result += f"{prefix}{_yaml_key(str(k))}:{json_to_yaml(v, _indent=_indent + 2, _is_root=False)}"
                     else:
                         result += f"{prefix}{_yaml_key(str(k))}: {_yaml_scalar(v)}\n"
-            elif isinstance(item, (dict, list)):
+            elif _is_container(item):
                 result += f"{pad}- {json_to_yaml(item, _indent=_indent + 1, _is_root=False)}"
             else:
                 result += f"{pad}- {_yaml_scalar(item)}\n"
