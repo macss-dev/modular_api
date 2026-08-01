@@ -9,6 +9,19 @@ issue_tracker: https://github.com/ccisnedev/modular_api/issues
 environment:
   sdk: ^3.9.0
 
+dependencies:
+  # OpenTelemetry API only — never the SDK, an exporter, grpc or protobuf. Declared
+  # directly rather than inherited, because this package does not depend on
+  # modular_api (runbook D21). The API is no-op without an SDK, so a consumer who
+  # never enables tracing pays a resolution entry and nothing else.
+  #
+  # This is the first runtime dependency the package has ever had. ADR-0004 keeps it free
+  # of any *database driver*, which is untouched: an instrumentation API is not a driver,
+  # and the conformance test still asserts no driver is present.
+  dartastic_opentelemetry_api: ^0.9.1
+
 dev_dependencies:
+  # The SDK is what makes spans observable at all — the API alone is no-op (runbook D22).
+  dartastic_opentelemetry: ^0.9.7
   lints: ^6.0.0
   test: ^1.26.3
