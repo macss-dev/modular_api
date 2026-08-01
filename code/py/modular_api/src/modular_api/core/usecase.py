@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Self, TypeVar
 
 from pydantic import BaseModel
 
@@ -109,12 +109,16 @@ class Input(BaseModel):
             )
 
     @classmethod
-    def from_json(cls, json: dict[str, object]) -> Input:
+    def from_json(cls, json: dict[str, object]) -> Self:
         """Deserialize from a plain dict with strict type validation.
 
         Uses Pydantic strict mode so JSON types must match field declarations
         exactly — no implicit coercion (e.g. int → str is rejected).
         Raises ``ValidationError`` for missing or wrongly-typed fields.
+
+        Returns ``Self``, not ``Input``: ``cls.model_validate`` builds ``cls``, so a subclass calling
+        this inherited factory gets its own type back. Annotating the base class here made every
+        consumer DTO's fields unreachable without a cast. See ``tests/test_dto_typing.py``.
         """
         return cls.model_validate(json, strict=True)
 
@@ -157,8 +161,11 @@ class Output(BaseModel):
             )
 
     @classmethod
-    def from_json(cls, json: dict[str, object]) -> Output:
-        """Deserialize from a plain dict with strict type validation."""
+    def from_json(cls, json: dict[str, object]) -> Self:
+        """Deserialize from a plain dict with strict type validation.
+
+        ``Self`` for the same reason as ``Input.from_json`` — see the note there.
+        """
         return cls.model_validate(json, strict=True)
 
     def to_json(self) -> dict[str, object]:
