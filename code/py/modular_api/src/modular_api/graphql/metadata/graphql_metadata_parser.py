@@ -148,11 +148,13 @@ class GraphqlMetadataParser:
                 diagnostics=_sort_diagnostics(diagnostics),
             )
 
+        # Bound once. The previous form called `_read_optional_child_map` twice — once to test for
+        # None and once to read through it — so the test guarded a *different* call than the one it
+        # protected, and no type checker could see the two as related.
+        defaults_map = _read_optional_child_map(root, "defaults")
         defaults_limit = _parse_limit(
             scope_name="defaults.limit",
-            value=_read_optional_child_map(root, "defaults").get("limit")
-            if _read_optional_child_map(root, "defaults") is not None
-            else None,
+            value=defaults_map.get("limit") if defaults_map is not None else None,
             diagnostics=diagnostics,
         )
 

@@ -15,7 +15,6 @@ Mirror of ``ModuleBuilder`` in Dart and TypeScript.
 
 from __future__ import annotations
 
-import inspect
 import typing
 from typing import Any, Callable
 
@@ -27,7 +26,7 @@ from modular_api.core.registry import (
     UseCaseRegistration,
     api_registry,
 )
-from modular_api.core.usecase import Input, Output, UseCase
+from modular_api.core.usecase import UseCase
 from modular_api.core.usecase_handler import usecase_handler
 
 

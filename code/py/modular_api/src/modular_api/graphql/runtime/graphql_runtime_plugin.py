@@ -20,7 +20,14 @@ from graphql import (
     specified_rules,
     validate,
 )
-from graphql.language.ast import DocumentNode, FieldNode, FragmentDefinitionNode, SelectionSetNode
+from graphql.language.ast import (
+    DocumentNode,
+    FieldNode,
+    FragmentDefinitionNode,
+    FragmentSpreadNode,
+    InlineFragmentNode,
+    SelectionSetNode,
+)
 
 from modular_api.core.health.health_check import HealthCheck, HealthCheckResult, HealthStatus
 from modular_api.core.health.health_service import HealthService
@@ -284,6 +291,12 @@ class GraphqlRuntimePlugin(Plugin):
                 )
 
     async def _execute_request(self, context: PluginRequestContext, ready: _GraphqlReadyState) -> dict[str, object]:
+        # Narrowed once rather than re-checked at each use. Reaching here means `setup` registered
+        # the route, which it only does when options exist — but the type cannot express that, and
+        # stating the invariant is better than five separate accesses that each look unguarded.
+        options = self._options
+        assert options is not None, "the GraphQL route is only registered when options are supplied"
+
         query = _read_query(context)
         if query is None:
             return {
@@ -298,11 +311,11 @@ class GraphqlRuntimePlugin(Plugin):
             return _graphql_ok_response(errors=[_format_graphql_error(error)])
 
         max_depth = _compute_document_depth(document)
-        if max_depth > self._options.max_depth:
+        if max_depth > options.max_depth:
             return _graphql_ok_response(
                 errors=[
                     _validation_error(
-                        f"Maximum operation depth of {self._options.max_depth} reached. Operation depth: {max_depth}.",
+                        f"Maximum operation depth of {options.max_depth} reached. Operation depth: {max_depth}.",
                         "queryDepthComplexity",
                     )
                 ]
@@ -312,18 +325,18 @@ class GraphqlRuntimePlugin(Plugin):
             ready.schema,
             document,
             tuple(specified_rules)
-            if self._options.introspection_enabled
+            if options.introspection_enabled
             else (*specified_rules, NoSchemaIntrospectionCustomRule),
         )
         if validation_errors:
             return _graphql_ok_response(errors=[_format_graphql_error(error) for error in validation_errors])
 
         complexity = _compute_document_complexity(document)
-        if complexity > self._options.max_complexity:
+        if complexity > options.max_complexity:
             return _graphql_ok_response(
                 errors=[
                     _validation_error(
-                        f"Maximum operation complexity of {self._options.max_complexity} reached. Operation complexity: {complexity}.",
+                        f"Maximum operation complexity of {options.max_complexity} reached. Operation complexity: {complexity}.",
                         "queryComplexity",
                     )
                 ]
@@ -735,14 +748,14 @@ def _collect_selection_set(
         return
 
     for selection in selection_set.selections:
-        if selection.kind == "field":
-            field = cast(FieldNode, selection)
+        if isinstance(selection, FieldNode):
+            field = selection
             collected.setdefault(field.name.value, []).append(field)
             continue
-        if selection.kind == "inline_fragment":
+        if isinstance(selection, InlineFragmentNode):
             _collect_selection_set(selection.selection_set, fragments, collected, visited_fragments)
             continue
-        if selection.kind == "fragment_spread":
+        if isinstance(selection, FragmentSpreadNode):
             fragment_name = selection.name.value
             if fragment_name in visited_fragments:
                 continue
@@ -991,7 +1004,7 @@ def _selection_set_depth(
 ) -> int:
     max_depth = current_depth
     for selection in selection_set.selections:
-        if selection.kind == "field":
+        if isinstance(selection, FieldNode):
             next_depth = current_depth + 1
             max_depth = max(max_depth, next_depth)
             if selection.selection_set is not None:
@@ -1000,10 +1013,10 @@ def _selection_set_depth(
                     _selection_set_depth(selection.selection_set, fragments, visited_fragments, next_depth),
                 )
             continue
-        if selection.kind == "inline_fragment":
+        if isinstance(selection, InlineFragmentNode):
             max_depth = max(max_depth, _selection_set_depth(selection.selection_set, fragments, visited_fragments, current_depth))
             continue
-        if selection.kind == "fragment_spread":
+        if isinstance(selection, FragmentSpreadNode):
             fragment_name = selection.name.value
             if fragment_name in visited_fragments:
                 continue
@@ -1032,15 +1045,15 @@ def _selection_set_complexity(
 ) -> int:
     complexity = 0
     for selection in selection_set.selections:
-        if selection.kind == "field":
+        if isinstance(selection, FieldNode):
             complexity += current_depth
             if selection.selection_set is not None:
                 complexity += _selection_set_complexity(selection.selection_set, fragments, visited_fragments, current_depth + 1)
             continue
-        if selection.kind == "inline_fragment":
+        if isinstance(selection, InlineFragmentNode):
             complexity += _selection_set_complexity(selection.selection_set, fragments, visited_fragments, current_depth)
             continue
-        if selection.kind == "fragment_spread":
+        if isinstance(selection, FragmentSpreadNode):
             fragment_name = selection.name.value
             if fragment_name in visited_fragments:
                 continue
@@ -1055,7 +1068,7 @@ def _collect_fragments(document: DocumentNode) -> dict[str, FragmentDefinitionNo
     return {
         definition.name.value: definition
         for definition in document.definitions
-        if definition.kind == "fragment_definition"
+        if isinstance(definition, FragmentDefinitionNode)
     }
 
 

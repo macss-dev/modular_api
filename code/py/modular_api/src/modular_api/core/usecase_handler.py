@@ -8,14 +8,14 @@ the full use-case lifecycle: parse → validate → execute → respond.
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
 
 from modular_api.core.use_case_exception import UseCaseException
-from modular_api.core.usecase import Input, Output, UseCase
+from modular_api.core.usecase import UseCase
 
 # Key used by LoggingMiddleware to store the request-scoped logger.
 LOGGER_STATE_KEY = "modular_logger"
@@ -74,16 +74,20 @@ def usecase_handler(factory: UseCaseFactory) -> Any:
             if method in ("GET", "DELETE"):
                 data: dict[str, Any] = {**dict(request.query_params), **request.path_params}
             else:
-                data = await request.json()
+                # Typed `object`, not `dict[str, Any]`. `request.json()` decodes any valid JSON —
+                # a bare string, an array, a number — so the guard below is load-bearing. Declaring
+                # the result a dict made a type checker call that guard dead code, which is exactly
+                # backwards: the annotation was the thing that was wrong.
+                payload: object = await request.json()
 
-                # Guard: request.json() decodes any valid JSON — including bare
-                # strings, arrays, or numbers.  Our factories expect a dict.
-                if not isinstance(data, dict):
+                if not isinstance(payload, dict):
                     return Response(
                         content=json.dumps({"error": "Request body must be a JSON object"}),
                         status_code=400,
                         media_type=_JSON_CONTENT_TYPE,
                     )
+
+                data = cast("dict[str, Any]", payload)
 
             # 2. Build use case
             use_case = factory(data)

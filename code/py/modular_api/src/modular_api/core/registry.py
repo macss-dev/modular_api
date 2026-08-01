@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from modular_api.core.usecase import Input, Output, UseCase
+from modular_api.core.usecase import UseCase
 
 # Type alias — same as in usecase_handler.py.
 UseCaseFactory = Callable[[dict[str, Any]], UseCase[Any, Any]]
