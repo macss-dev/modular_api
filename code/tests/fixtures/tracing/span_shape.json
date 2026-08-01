@@ -1,0 +1,37 @@
+{
+  "$comment": [
+    "Gate G6 — the span shape one representative request must produce in all three languages.",
+    "Compared key-for-key by code/tests/integration_test/tracing_parity_test.ps1 against the output",
+    "of each language's dump script. The comparison is EXACT, not a subset: that is the whole point.",
+    "A per-language test asserts the attributes that are there and never the ones that are not, so",
+    "an extra attribute in one implementation passes every existing suite. This fixture is the only",
+    "thing that catches it.",
+    "",
+    "Ids, timestamps and durations are excluded deliberately — they differ every run and belong to",
+    "the SDK. Parentage is by NAME, which is stable and is what a waterfall shows.",
+    "",
+    "The request: POST /api/cuenta/detalle with an X-Request-ID header, whose handler starts one",
+    "nested client span through ambient context alone. The header is sent so the one conditional",
+    "attribute is covered; the nested span is the mechanism the satellite packages use to parent",
+    "their spans, so comparing it here compares theirs without core depending on them."
+  ],
+  "spans": [
+    {
+      "name": "POST /api/cuenta/detalle",
+      "kind": "server",
+      "parent": null,
+      "attributeKeys": [
+        "http.request.header.x-request-id",
+        "http.request.method",
+        "http.response.status_code",
+        "url.path"
+      ]
+    },
+    {
+      "name": "upstream impulsa",
+      "kind": "client",
+      "parent": "POST /api/cuenta/detalle",
+      "attributeKeys": []
+    }
+  ]
+}
