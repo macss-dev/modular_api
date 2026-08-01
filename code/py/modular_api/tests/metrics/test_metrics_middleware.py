@@ -1,6 +1,8 @@
 """RED — Metrics middleware for Starlette: request counter, in-flight gauge, duration histogram."""
 
-import pytest
+from collections.abc import Awaitable, Callable
+from typing import TypeAlias
+
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
@@ -10,6 +12,16 @@ from starlette.testclient import TestClient
 from modular_api.core.metrics.metric import Counter, Gauge, Histogram
 from modular_api.core.metrics.metric_registry import MetricRegistry
 from modular_api.core.metrics.metrics_middleware import metrics_handler, metrics_middleware
+
+
+# A route handler as Starlette calls it. Named so `_build_app` can take one as a parameter without the
+# nested `async def handler` below rebinding that parameter's name — which is what it used to do.
+_RouteHandler: TypeAlias = Callable[[Request], Awaitable[Response]]
+
+
+async def _ok_handler(request: Request) -> Response:
+    del request
+    return PlainTextResponse("ok")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -26,17 +38,14 @@ def _make_metrics() -> tuple[MetricRegistry, Counter, Gauge, Histogram]:
 
 
 def _build_app(
-    handler=None,
+    handler: _RouteHandler | None = None,
     *,
     excluded_routes: list[str] | None = None,
     registered_paths: list[str] | None = None,
 ) -> tuple[MetricRegistry, Counter, Gauge, Histogram, Starlette]:
     registry, total, in_flight, duration = _make_metrics()
 
-    if handler is None:
-
-        async def handler(request: Request) -> Response:
-            return PlainTextResponse("ok")
+    route_handler = handler if handler is not None else _ok_handler
 
     mw = metrics_middleware(
         requests_total=total,
@@ -47,12 +56,12 @@ def _build_app(
     )
 
     app = Starlette(routes=[
-        Route("/api/greetings/hello", handler, methods=["GET", "POST"]),
-        Route("/api/test", handler, methods=["GET", "POST"]),
-        Route("/api/data", handler, methods=["GET"]),
-        Route("/api/slow", handler, methods=["GET"]),
-        Route("/health", handler, methods=["GET"]),
-        Route("/metrics", handler, methods=["GET"]),
+        Route("/api/greetings/hello", route_handler, methods=["GET", "POST"]),
+        Route("/api/test", route_handler, methods=["GET", "POST"]),
+        Route("/api/data", route_handler, methods=["GET"]),
+        Route("/api/slow", route_handler, methods=["GET"]),
+        Route("/health", route_handler, methods=["GET"]),
+        Route("/metrics", route_handler, methods=["GET"]),
     ])
     app.add_middleware(mw)
     return registry, total, in_flight, duration, app

@@ -3,10 +3,22 @@
 from __future__ import annotations
 
 import warnings
+from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
 from modular_api.core.usecase import Input, Output
+
+
+# `to_schema()` returns `dict[str, object]` — a generated JSON Schema is arbitrary nested JSON, and the
+# public signature says so rather than promising a shape it cannot check. These two readers are where
+# this test states the shape it expects, once, instead of at every assertion.
+def _properties(schema: dict[str, object]) -> dict[str, Any]:
+    return cast("dict[str, Any]", schema["properties"])
+
+
+def _required(schema: dict[str, object]) -> list[str]:
+    return cast("list[str]", schema.get("required", []))
 
 
 class TestInputIsBaseModel:
@@ -31,11 +43,12 @@ class TestInputIsBaseModel:
             name: str = Field(description="Name to greet")
 
         schema = NameInput.to_schema()
+        properties = _properties(schema)
         assert schema["type"] == "object"
-        assert "name" in schema["properties"]
-        assert schema["properties"]["name"]["type"] == "string"
-        assert schema["properties"]["name"]["description"] == "Name to greet"
-        assert "name" in schema["required"]
+        assert "name" in properties
+        assert properties["name"]["type"] == "string"
+        assert properties["name"]["description"] == "Name to greet"
+        assert "name" in _required(schema)
 
     def test_simple_input_from_json(self) -> None:
         """from_json() builds an Input instance from a plain dict."""
@@ -64,9 +77,9 @@ class TestInputIsBaseModel:
             optional_field: str | None = None
 
         schema = OptInput.to_schema()
-        assert "required_field" in schema["required"]
+        assert "required_field" in _required(schema)
         # optional_field should NOT be in required
-        assert "optional_field" not in schema.get("required", [])
+        assert "optional_field" not in _required(schema)
 
 
 class TestManualToSchemaDeprecation:

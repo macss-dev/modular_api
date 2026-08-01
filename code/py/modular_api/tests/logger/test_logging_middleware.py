@@ -1,8 +1,9 @@
 """RED — Logging middleware for Starlette: trace_id, structured JSON logs."""
 
 import json
+from collections.abc import Awaitable, Callable
+from typing import TypeAlias
 
-import pytest
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
@@ -18,10 +19,19 @@ from modular_api.core.logger.logging_middleware import (
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
+# A route handler as Starlette calls it. Named so `_build_app` can take one as a parameter without the
+# nested `async def handler` below rebinding that parameter's name — which is what it used to do.
+_RouteHandler: TypeAlias = Callable[[Request], Awaitable[Response]]
+
+
+async def _ok_handler(request: Request) -> Response:
+    del request
+    return PlainTextResponse("ok")
+
 
 def _build_app(
     *,
-    handler=None,
+    handler: _RouteHandler | None = None,
     excluded_routes: list[str] | None = None,
     log_level: LogLevel = LogLevel.debug,
 ) -> tuple[list[str], Starlette]:
@@ -31,10 +41,7 @@ def _build_app(
     def write_fn(line: str) -> None:
         captured.append(line)
 
-    if handler is None:
-
-        async def handler(request: Request) -> Response:
-            return PlainTextResponse("ok")
+    route_handler = handler if handler is not None else _ok_handler
 
     mw = logging_middleware(
         log_level=log_level,
@@ -44,11 +51,11 @@ def _build_app(
     )
 
     app = Starlette(routes=[
-        Route("/api/test", handler, methods=["GET", "POST", "PUT"]),
-        Route("/api/users/create", handler, methods=["POST"]),
-        Route("/api/fail", handler, methods=["POST"]),
-        Route("/health", handler, methods=["GET"]),
-        Route("/metrics", handler, methods=["GET"]),
+        Route("/api/test", route_handler, methods=["GET", "POST", "PUT"]),
+        Route("/api/users/create", route_handler, methods=["POST"]),
+        Route("/api/fail", route_handler, methods=["POST"]),
+        Route("/health", route_handler, methods=["GET"]),
+        Route("/metrics", route_handler, methods=["GET"]),
     ])
     app.add_middleware(mw)
     return captured, app
@@ -229,7 +236,7 @@ class TestLoggerPropagation:
             captured_logger.append(getattr(request.state, LOGGER_STATE_KEY, None))
             return PlainTextResponse("ok")
 
-        captured, app = _build_app(handler=handler)
+        _, app = _build_app(handler=handler)
         client = TestClient(app)
         client.get("/api/test")
         assert captured_logger[0] is not None
@@ -242,7 +249,7 @@ class TestLoggerPropagation:
             captured_logger.append(getattr(request.state, LOGGER_STATE_KEY))
             return PlainTextResponse("ok")
 
-        captured, app = _build_app(handler=handler)
+        _, app = _build_app(handler=handler)
         client = TestClient(app)
         client.get("/api/test", headers={"X-Request-ID": "my-trace"})
         assert captured_logger[0].trace_id == "my-trace"

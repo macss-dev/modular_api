@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Iterator
 
 import pytest
 from starlette.requests import Request
-from starlette.responses import Response
 from starlette.testclient import TestClient
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -26,7 +25,7 @@ from modular_api.core.registry import api_registry
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry() -> None:
+def _clean_registry() -> Iterator[None]:
     api_registry.clear()
     yield
     api_registry.clear()

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
+from typing import Any
+
 
 from modular_api.core.registry import ApiRegistry, UseCaseDocMeta, UseCaseRegistration
 
@@ -14,7 +15,7 @@ def _dummy_factory(json: dict) -> object:
     return object()
 
 
-def _make_registration(**overrides: object) -> UseCaseRegistration:
+def _make_registration(**overrides: Any) -> UseCaseRegistration:
     """Builds a UseCaseRegistration with sensible defaults, overridable per field."""
     defaults: dict = {
         "module": "users",
