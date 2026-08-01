@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'client_tracing.dart';
+
 typedef ServiceDecoder<T> = T Function(Object? value);
 typedef ServiceAuthProvider = FutureOr<Map<String, String>> Function(
   ServiceOperation operation,
@@ -268,6 +270,17 @@ class HttpServiceClient implements ServiceClient {
       headers.addAll(await authProvider(operation));
     }
 
+    // Client span plus trace-context and request-id injection. Zero configuration: the
+    // parent is the ambient server span and the tracer is the global provider, both
+    // no-ops when no OpenTelemetry SDK is installed.
+    final tracing = ClientCallTracing.start(
+      method: method,
+      operationId: operation.operationId,
+      uri: uri,
+      headers: headers,
+      inboundRequestId: headers[requestIdHeader],
+    );
+
     final responseResult = await _withTimeout(
       _executeRequest<T>(
         operation: operation,
@@ -278,6 +291,12 @@ class HttpServiceClient implements ServiceClient {
         stopwatch: stopwatch,
       ),
       operation: operation,
+    );
+
+    tracing.complete(
+      statusCode: responseResult.isSuccess
+          ? responseResult.value.metadata.statusCode
+          : responseResult.failure.statusCode,
     );
 
     config.telemetryHooks?.onCompleted?.call(
