@@ -12,7 +12,7 @@ application, which builds a provider and passes it here.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
 from opentelemetry.propagators.textmap import TextMapPropagator
@@ -52,6 +52,23 @@ class TracingOptions:
     #: so a field like Google's ``logging.googleapis.com/trace`` — which needs a project id
     #: the framework has no business knowing — is produced here by the application.
     trace_field_formatter: TraceFieldFormatter | None = None
+
+    #: Runs when the server shuts down, before the process goes away.
+    #:
+    #: **The framework offers the timing; the application decides what it means.** On a
+    #: scale-to-zero platform this is the only window to flush queued spans before the
+    #: container dies — but the provider belongs to the application, which may share it with
+    #: a worker or a scheduled job still running. Tearing down a resource the framework did
+    #: not create would be presumptuous, and ``opentelemetry.trace.TracerProvider`` exposes
+    #: only ``get_tracer`` anyway (runbook D8 as revised).
+    #:
+    #: .. code-block:: python
+    #:
+    #:     on_shutdown=provider.shutdown
+    #:
+    #: A callback that raises is swallowed: losing telemetry is bad, failing to stop the
+    #: server is worse.
+    on_shutdown: Callable[[], Awaitable[None] | None] | None = None
 
     @property
     def policy(self) -> PropagationPolicy:

@@ -22,6 +22,7 @@ Usage::
 
 from __future__ import annotations
 
+import inspect
 from contextlib import asynccontextmanager
 from typing import Any, Callable
 
@@ -217,6 +218,21 @@ class ModularApi:
             try:
                 yield
             finally:
+                # Tracing's shutdown callback runs alongside the plugin host's, not as a
+                # plugin. There is deliberately no tracing plugin: every responsibility
+                # ADR-0005 decision 4 gave one was reassigned by a later decision, and what
+                # remained was a plugin whose setup() did nothing (see ADR-0005 A7).
+                #
+                # The framework owns the timing; the application owns the provider. A
+                # callback that raises is swallowed — losing telemetry is bad, failing to
+                # stop is worse.
+                if self._tracing is not None and self._tracing.on_shutdown is not None:
+                    try:
+                        result = self._tracing.on_shutdown()
+                        if inspect.isawaitable(result):
+                            await result
+                    except Exception:  # noqa: BLE001 - see comment above
+                        pass
                 await plugin_host.shutdown()
 
         app = Starlette(routes=routes, lifespan=lifespan)
