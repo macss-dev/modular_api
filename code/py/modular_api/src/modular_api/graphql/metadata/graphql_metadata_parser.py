@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 import json5
 
@@ -90,7 +90,11 @@ class GraphqlMetadataParser:
         physical_objects_by_id = {object_.id: object_ for object_ in physical_catalog.objects}
 
         try:
-            decoded = json5.loads(raw_jsonc)
+            # `json5` ships no type information, so everything it returns is implicitly Any and
+            # that spread to every downstream read — over fifty diagnostics from this one line.
+            # Declared `object` here and narrowed once below, which puts the untyped boundary in one
+            # place instead of at every `.get`.
+            decoded = cast(object, json5.loads(raw_jsonc))
         except Exception as error:  # noqa: BLE001
             return GraphqlMetadataParseResult(
                 metadata=None,
@@ -115,7 +119,10 @@ class GraphqlMetadataParser:
                 ),
             )
 
-        root = dict(decoded)
+        # The `isinstance` above establishes the shape; the cast carries it. Values stay `Any`
+        # because a metadata document's values genuinely are arbitrary JSON — the helpers below each
+        # check what they read.
+        root = cast("dict[str, Any]", decoded)
         _collect_unknown_keys(
             map_=root,
             allowed_keys={"$schema", "version", "defaults", "objects"},
@@ -159,8 +166,10 @@ class GraphqlMetadataParser:
         )
 
         objects: dict[str, GraphqlObjectMetadata] = {}
-        for object_id in sorted(str(key) for key in objects_value.keys()):
-            object_value = objects_value.get(object_id)
+        # Narrowed by the `isinstance` above; the cast carries it into the loop.
+        objects_map = cast("dict[str, Any]", objects_value)
+        for object_id in sorted(objects_map):
+            object_value = objects_map.get(object_id)
             if not isinstance(object_value, dict):
                 diagnostics.append(
                     GraphqlMetadataDiagnostic(
@@ -172,7 +181,7 @@ class GraphqlMetadataParser:
                 )
                 continue
 
-            object_map = dict(object_value)
+            object_map = cast("dict[str, Any]", object_value)
             _collect_unknown_keys(
                 map_=object_map,
                 allowed_keys={"publish", "name", "key", "fields", "relations", "limit"},
@@ -261,7 +270,9 @@ def _collect_unknown_keys(
 
 def _read_optional_child_map(parent: dict[str, Any], key: str) -> dict[str, Any] | None:
     value = parent.get(key)
-    return dict(value) if isinstance(value, dict) else None
+    # `dict(x)` on an untyped mapping produces another untyped mapping. The `isinstance` establishes
+    # the shape; the cast is what carries it to the caller.
+    return cast("dict[str, Any]", value) if isinstance(value, dict) else None
 
 
 def _read_optional_string(
@@ -296,7 +307,9 @@ def _read_optional_string_list(
     value = map_.get(key)
     if value is None:
         return None
-    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+    if not isinstance(value, list) or any(
+        not isinstance(item, str) for item in cast("list[object]", value)
+    ):
         diagnostics.append(
             GraphqlMetadataDiagnostic(
                 severity=GraphqlMetadataSeverity.ERROR,
@@ -307,7 +320,7 @@ def _read_optional_string_list(
             )
         )
         return None
-    return tuple(value)
+    return tuple(cast("list[str]", value))
 
 
 def _parse_fields(
@@ -330,8 +343,9 @@ def _parse_fields(
         return {}
 
     fields: dict[str, GraphqlFieldMetadata] = {}
-    for field_name in sorted(str(key) for key in value.keys()):
-        field_value = value.get(field_name)
+    fields_map = cast("dict[str, Any]", value)
+    for field_name in sorted(fields_map):
+        field_value = fields_map.get(field_name)
         if not isinstance(field_value, dict):
             diagnostics.append(
                 GraphqlMetadataDiagnostic(
