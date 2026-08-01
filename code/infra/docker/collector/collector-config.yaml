@@ -1,0 +1,31 @@
+# A real OpenTelemetry Collector, used to prove our wiring rather than an encoder we wrote.
+#
+# ADR-0005 A3 gave the wire format away: the OTel SDK speaks OTLP, and this file exists to show
+# that a genuine Collector accepts what the SDK sends when our instrumentation feeds it. If this
+# receives spans, the whole chain holds — our propagation and span construction, the SDK's
+# serialisation, and the Collector's parser.
+receivers:
+  otlp:
+    protocols:
+      http:
+        # 0.0.0.0 rather than localhost: inside the container, localhost is the container.
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  # One OTLP-JSON object per line, which the test reads and asserts against. Deliberately not the
+  # `debug` exporter: parsing a human-readable log is a test that breaks when the format is
+  # prettified.
+  #
+  # On Linux the bind-mounted `output/` directory must be writable by the container's user
+  # (uid 10001) — `chmod 777 output` once. On Docker Desktop it already is.
+  file:
+    path: /output/spans.jsonl
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [file]
+  telemetry:
+    logs:
+      level: warn

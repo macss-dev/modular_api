@@ -19,5 +19,15 @@ services:
       - ./sqlserver/healthcheck.sh:/opt/modular_api/healthcheck.sh:ro
       - sqlserver_data:/var/opt/mssql
 
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.121.0
+    container_name: modular_api_otel_collector
+    command: ['--config=/etc/otel/collector-config.yaml']
+    ports:
+      - '${OTEL_COLLECTOR_HTTP_PORT:-4318}:4318'
+    volumes:
+      - ./collector/collector-config.yaml:/etc/otel/collector-config.yaml:ro
+      - ./collector/output:/output
+
 volumes:
   sqlserver_data:
