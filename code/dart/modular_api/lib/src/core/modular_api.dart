@@ -4,6 +4,8 @@ import 'package:modular_api/src/core/error_response_middleware.dart';
 import 'package:modular_api/src/graphql/runtime/graphql_runtime_health.dart';
 import 'package:modular_api/src/core/logger/logging_middleware.dart';
 import 'package:modular_api/src/core/metrics/metric_registry.dart';
+import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart'
+    show OTelAPI;
 import 'package:modular_api/src/core/official_plugins.dart';
 import 'package:modular_api/src/core/tracing/tracing_middleware.dart';
 import 'package:modular_api/src/core/usecase/usecase_http_handler.dart';
@@ -235,6 +237,21 @@ class ModularApi {
     // is off (gate G3).
     final tracingOptions = tracing;
     if (tracingOptions != null) {
+      // Publish the chain as the global propagator, which is how satellite packages
+      // inject it. `modular_api_rest_client` does not depend on core (D21), so it cannot
+      // reach our W3C propagator — and per the OpenTelemetry API's own guidance it should
+      // not: instrumentation libraries read the global, and the host or SDK sets it.
+      //
+      // That indirection also means whatever chain the application configured is honoured
+      // on outbound calls, including a Cloud Trace propagator it appended, without any
+      // package needing to know such a thing exists.
+      final propagators = tracingOptions.policy.propagators;
+      if (propagators.isNotEmpty) {
+        OTelAPI.textMapPropagator = propagators.length == 1
+            ? propagators.single
+            : OTelAPI.compositePropagator(propagators);
+      }
+
       pipeline = pipeline.addMiddleware(
         tracingMiddleware(
           tracer: tracingOptions.tracer,
