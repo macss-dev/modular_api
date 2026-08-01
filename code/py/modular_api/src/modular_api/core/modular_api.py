@@ -35,7 +35,7 @@ from modular_api.core.health.health_service import HealthService
 from modular_api.core.logger.logger import LogLevel
 from modular_api.core.logger.logging_middleware import logging_middleware
 from opentelemetry.propagate import set_global_textmap
-from opentelemetry.propagators.composite import CompositeHTTPPropagator
+from opentelemetry.propagators.composite import CompositePropagator
 
 from modular_api.core.tracing.tracing_middleware import tracing_middleware
 from modular_api.core.tracing.tracing_options import TracingOptions
@@ -303,7 +303,7 @@ class ModularApi:
                 set_global_textmap(
                     propagators[0]
                     if len(propagators) == 1
-                    else CompositeHTTPPropagator(propagators)
+                    else CompositePropagator(propagators)
                 )
 
             app.add_middleware(
