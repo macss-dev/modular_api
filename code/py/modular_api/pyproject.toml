@@ -32,6 +32,9 @@ dependencies = [
 serve = ["uvicorn>=0.30"]
 graphql = ["json5>=0.9.14", "graphql-core>=3.2,<3.3"]
 dev = [
+    # Configured below at `typeCheckingMode = "strict"`. Declared here because a checker the
+    # repo configures and never installs is a checker that has never run.
+    "pyright>=1.1.400",
     "json5>=0.9.14",
     "graphql-core>=3.2,<3.3",
     "pytest>=8.0",
@@ -57,3 +60,24 @@ asyncio_mode = "auto"
 [tool.pyright]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
+
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportUnknownParameterType = false
+reportUnknownLambdaType = false
+reportMissingParameterType = false
+reportMissingTypeArgument = false
+# `example/` is documentation a consumer copies, not a published typed surface — same relaxed family
+# as `tests/`, and the same expectation that nothing which can indicate a real defect is silenced.
+[[tool.pyright.executionEnvironments]]
+root = "example"
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportUnknownParameterType = false
+reportUnknownLambdaType = false
+reportMissingParameterType = false
+reportMissingTypeArgument = false

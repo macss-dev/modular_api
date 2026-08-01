@@ -454,8 +454,19 @@ class RuntimePluginHost(PluginHost):
     def shutdown_sync(self) -> None:
         for callback in reversed(self._shutdown_callbacks):
             result = callback()
-            if inspect.isawaitable(result):
+            # `iscoroutine`, not `isawaitable`. `asyncio.run` accepts a coroutine specifically — a
+            # callback returning some other awaitable (a Future, an object with `__await__`) would
+            # have satisfied `isawaitable` and then failed inside `run`. Anything awaitable but not a
+            # coroutine is driven through a coroutine wrapper instead.
+            if inspect.iscoroutine(result):
                 asyncio.run(result)
+            elif inspect.isawaitable(result):
+                awaitable = result
+
+                async def _drive() -> None:
+                    await awaitable
+
+                asyncio.run(_drive())
 
     def _assert_mutable(self) -> None:
         if self._frozen:

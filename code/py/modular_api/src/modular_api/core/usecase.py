@@ -93,7 +93,12 @@ class Input(BaseModel):
 
     model_config = {"extra": "ignore"}
 
-    def __init_subclass__(cls, **kwargs: object) -> None:
+    # `Any`, not `object`, and the distinction is the whole point of a pass-through: pydantic's
+    # `BaseModel.__init_subclass__` declares every config key as a typed keyword parameter, and
+    # `object` is assignable to none of them. `Any` is assignable to all of them, which is the honest
+    # statement for kwargs we forward untouched and never read. The same shape of mistake as typing a
+    # constructor parameter `unknown` in TypeScript.
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if "to_schema" in cls.__dict__:
             warnings.warn(
@@ -136,7 +141,12 @@ class Output(BaseModel):
 
     model_config = {"extra": "ignore"}
 
-    def __init_subclass__(cls, **kwargs: object) -> None:
+    # `Any`, not `object`, and the distinction is the whole point of a pass-through: pydantic's
+    # `BaseModel.__init_subclass__` declares every config key as a typed keyword parameter, and
+    # `object` is assignable to none of them. `Any` is assignable to all of them, which is the honest
+    # statement for kwargs we forward untouched and never read. The same shape of mistake as typing a
+    # constructor parameter `unknown` in TypeScript.
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if "to_schema" in cls.__dict__:
             warnings.warn(
