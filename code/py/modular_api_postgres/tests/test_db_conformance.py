@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 from modular_api_postgres import (
     DbCommand,
@@ -15,12 +16,14 @@ from modular_api_postgres import (
 )
 
 
-def _load_fixture() -> dict[str, object]:
-    return json.loads(
+def _load_fixture() -> dict[str, Any]:
+    # `dict[str, Any]`, not `dict[str, object]`: every read below walks into the fixture, and `object`
+    # stops at the first subscript. The values really are arbitrary JSON.
+    return cast("dict[str, Any]", json.loads(
         (Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "db_client" / "postgres.json").read_text(
             encoding="utf-8"
         )
-    )
+    ))
 
 
 def test_matches_the_shared_postgres_connection_fixture() -> None:

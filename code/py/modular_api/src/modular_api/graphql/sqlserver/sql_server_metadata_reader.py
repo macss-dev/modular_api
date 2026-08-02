@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, cast
-
-if TYPE_CHECKING:
-    import pyodbc
+from typing import Any, Callable, cast
 
 from modular_api.graphql.sqlserver.physical_model import (
     PhysicalCatalog,
@@ -57,9 +54,9 @@ class _MutablePhysicalObject:
     kind: PhysicalObjectKind
     schema_name: str
     object_name: str
-    identity_fields: list[str] = field(default_factory=list)
-    fields: list[PhysicalField] = field(default_factory=list)
-    relations: list[PhysicalRelationSeed] = field(default_factory=list)
+    identity_fields: list[str] = field(default_factory=list[str])
+    fields: list[PhysicalField] = field(default_factory=list[PhysicalField])
+    relations: list[PhysicalRelationSeed] = field(default_factory=list[PhysicalRelationSeed])
 
 
 @dataclass(slots=True)
@@ -67,8 +64,8 @@ class _MutableRelation:
     name: str
     source_object_id: str
     target_object_id: str
-    source_fields: list[str] = field(default_factory=list)
-    target_fields: list[str] = field(default_factory=list)
+    source_fields: list[str] = field(default_factory=list[str])
+    target_fields: list[str] = field(default_factory=list[str])
 
 
 def _load_objects(

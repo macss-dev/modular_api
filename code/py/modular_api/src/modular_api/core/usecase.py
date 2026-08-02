@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Self, TypeVar
 
 from pydantic import BaseModel
+
+from modular_api.core.logger.logger import ModularLogger
 
 
 def _reorder_type_first(prop: dict[str, Any]) -> dict[str, Any]:
@@ -93,7 +95,12 @@ class Input(BaseModel):
 
     model_config = {"extra": "ignore"}
 
-    def __init_subclass__(cls, **kwargs: object) -> None:
+    # `Any`, not `object`, and the distinction is the whole point of a pass-through: pydantic's
+    # `BaseModel.__init_subclass__` declares every config key as a typed keyword parameter, and
+    # `object` is assignable to none of them. `Any` is assignable to all of them, which is the honest
+    # statement for kwargs we forward untouched and never read. The same shape of mistake as typing a
+    # constructor parameter `unknown` in TypeScript.
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if "to_schema" in cls.__dict__:
             warnings.warn(
@@ -104,12 +111,16 @@ class Input(BaseModel):
             )
 
     @classmethod
-    def from_json(cls, json: dict[str, object]) -> Input:
+    def from_json(cls, json: dict[str, object]) -> Self:
         """Deserialize from a plain dict with strict type validation.
 
         Uses Pydantic strict mode so JSON types must match field declarations
         exactly — no implicit coercion (e.g. int → str is rejected).
         Raises ``ValidationError`` for missing or wrongly-typed fields.
+
+        Returns ``Self``, not ``Input``: ``cls.model_validate`` builds ``cls``, so a subclass calling
+        this inherited factory gets its own type back. Annotating the base class here made every
+        consumer DTO's fields unreachable without a cast. See ``tests/test_dto_typing.py``.
         """
         return cls.model_validate(json, strict=True)
 
@@ -136,7 +147,12 @@ class Output(BaseModel):
 
     model_config = {"extra": "ignore"}
 
-    def __init_subclass__(cls, **kwargs: object) -> None:
+    # `Any`, not `object`, and the distinction is the whole point of a pass-through: pydantic's
+    # `BaseModel.__init_subclass__` declares every config key as a typed keyword parameter, and
+    # `object` is assignable to none of them. `Any` is assignable to all of them, which is the honest
+    # statement for kwargs we forward untouched and never read. The same shape of mistake as typing a
+    # constructor parameter `unknown` in TypeScript.
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if "to_schema" in cls.__dict__:
             warnings.warn(
@@ -147,8 +163,11 @@ class Output(BaseModel):
             )
 
     @classmethod
-    def from_json(cls, json: dict[str, object]) -> Output:
-        """Deserialize from a plain dict with strict type validation."""
+    def from_json(cls, json: dict[str, object]) -> Self:
+        """Deserialize from a plain dict with strict type validation.
+
+        ``Self`` for the same reason as ``Input.from_json`` — see the note there.
+        """
         return cls.model_validate(json, strict=True)
 
     def to_json(self) -> dict[str, object]:
@@ -183,7 +202,12 @@ class UseCase(ABC, Generic[I, O]):
 
     # Request-scoped logger injected by the framework before execute().
     # Available inside execute(). None when running without middleware.
-    logger: object | None = None
+    #
+    # `ModularLogger | None`, not `object | None`: the framework always injects a logger that satisfies
+    # this protocol, and `object` made the one thing a use case does with it — `self.logger.info(...)` —
+    # fail to type-check. The `example/` use cases in this repo were the proof: they call it exactly as a
+    # consumer would. `PluginRequestContext.logger` already named the protocol.
+    logger: ModularLogger | None = None
 
     @property
     @abstractmethod

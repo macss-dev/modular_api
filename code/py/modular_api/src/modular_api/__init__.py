@@ -54,6 +54,7 @@ from modular_api.openapi.openapi import (
 from modular_api.openapi.swagger_docs import swagger_docs_handler
 
 __all__ = [
+    "HostMetadata",
     "ApiRegistry",
     "Counter",
     "Field",

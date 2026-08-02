@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from starlette.testclient import TestClient
 
-from modular_api import ModularApi, Plugin, PluginHost, PluginManifest
+from modular_api import ModularApi, Plugin, PluginHost, PluginManifest, PluginRoute
 
 
 class ProbePlugin(Plugin):
@@ -17,13 +17,13 @@ class ProbePlugin(Plugin):
 
     def setup(self, host: PluginHost) -> None:
         host.register_route(
-            {
-                "id": "probe-route",
-                "method": "GET",
-                "path": "/plugin-probe",
-                "visibility": "custom",
-                "handler": lambda _context: {"status": 200, "body": {"ok": True}},
-            }
+            PluginRoute(
+                id="probe-route",
+                method="GET",
+                path="/plugin-probe",
+                visibility="custom",
+                handler=lambda _context: {"status": 200, "body": {"ok": True}},
+            )
         )
 
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from modular_api.openapi.openapi import json_to_yaml
 

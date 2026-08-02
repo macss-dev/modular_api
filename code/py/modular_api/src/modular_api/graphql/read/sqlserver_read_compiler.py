@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from modular_api.graphql.catalog import (
     GraphqlCatalog,
     GraphqlCatalogField,
@@ -21,13 +23,24 @@ from modular_api.graphql.read.sql_read_contract import (
     SqlFilterOperator,
     SqlItemSelection,
     SqlOrderByClause,
-    SqlPage,
     SqlParameter,
     SqlReadCommand,
     SqlReadCommandPurpose,
     SqlRelationBatchSelection,
     SqlSortDirection,
 )
+
+
+def _sequence_operand(value: object) -> tuple[Any, ...]:
+    """The operand of an ``IN`` condition, or empty when it is not a sequence.
+
+    A function rather than an inline conditional so the narrowing applies to a parameter: narrowing
+    ``condition.value`` in place gave that member an unparameterised element type, which then travelled
+    into every parameter the compiler bound from it.
+    """
+    if isinstance(value, (list, tuple)):
+        return tuple(cast("list[Any] | tuple[Any, ...]", value))
+    return ()
 
 
 class SqlServerReadCompiler:
@@ -225,7 +238,7 @@ class SqlServerReadCompiler:
         if condition.operator is SqlFilterOperator.NE:
             return f"{column_ref} <> @{parameters.add(condition.value, type_=field.type)}"
         if condition.operator is SqlFilterOperator.IN_LIST:
-            values = tuple(condition.value) if isinstance(condition.value, (list, tuple)) else ()
+            values = _sequence_operand(condition.value)
             if not values:
                 return "1 = 0"
             parameter_refs = ", ".join(f"@{parameters.add(value, type_=field.type)}" for value in values)

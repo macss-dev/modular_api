@@ -26,6 +26,7 @@ from modular_api.graphql import (
     GraphqlCatalogRelation,
     GraphqlCatalogRelationCardinality,
     GraphqlCatalogSource,
+    GraphqlEventSink,
     GraphqlOptions,
     GraphqlPublishedObject,
     ReadExecutionContext,
@@ -311,7 +312,7 @@ def _build_api(
     default_limit: int = 50,
     max_limit: int = 200,
     introspection_enabled: bool = False,
-    on_event: object | None = None,
+    on_event: GraphqlEventSink | None = None,
 ) -> ModularApi:
     return ModularApi(
         base_path="/api",
