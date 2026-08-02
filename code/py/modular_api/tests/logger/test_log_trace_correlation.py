@@ -166,6 +166,7 @@ def test_the_trace_id_in_the_log_equals_the_exported_span_trace_id() -> None:
     logs = _logs_for(tracing=_options)
 
     span = _span_named("GET /api/cuenta/ping")
+    assert span is not None and span.context is not None
     assert logs[0]["trace_id"] == f"{span.context.trace_id:032x}"
 
 
@@ -173,6 +174,7 @@ def test_span_id_is_emitted_on_lines_logged_while_the_span_is_active() -> None:
     logs = _logs_for(tracing=_options)
 
     span = _span_named("GET /api/cuenta/ping")
+    assert span is not None and span.context is not None
     completed = _line(logs, "request completed")
     assert completed["span_id"] == f"{span.context.span_id:016x}"
 

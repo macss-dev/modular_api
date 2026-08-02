@@ -49,6 +49,8 @@ trace.set_tracer_provider(_provider)
 _tracer = _provider.get_tracer("test-host")
 
 S = TypeVar("S")
+#: What a transaction body returns — the runner is transparent in it.
+_T = TypeVar("_T")
 
 _SETTINGS = DbConnectionSettings.from_environment(
     environment={
@@ -93,7 +95,7 @@ def _client(
             settings=_SETTINGS,
             session_provider=_FakeSessionProvider(acquire_failure),
             command_executor=_FakeCommandExecutor(failure),
-            transaction_runner=_FakeTransactionRunner(),
+            transaction_runner=_FakeTransactionRunner[str](),
         ),
         options,
     )
@@ -139,6 +141,7 @@ def test_the_span_is_kind_client_and_a_child_of_the_active_server_span() -> None
     command = _span_named("SELECT cuenta")
 
     assert command is not None and server is not None
+    assert command.context is not None and server.context is not None
     assert command.kind is SpanKind.CLIENT
     assert command.context.trace_id == server.context.trace_id
 
@@ -351,7 +354,7 @@ def test_commands_inside_the_body_nest_under_the_transaction_span() -> None:
     command = _span_named("SELECT cuenta")
 
     assert transaction is not None and command is not None
-    assert command.parent is not None
+    assert command.parent is not None and transaction.context is not None
     assert command.parent.span_id == transaction.context.span_id
 
 
@@ -394,6 +397,7 @@ def test_the_acquisition_span_precedes_the_command_span() -> None:
     command = _span_named("SELECT cuenta")
 
     assert connect is not None and command is not None
+    assert connect.start_time is not None and command.start_time is not None
     assert connect.start_time <= command.start_time
 
 
@@ -427,7 +431,7 @@ def test_an_unwrapped_client_produces_no_spans() -> None:
             settings=_SETTINGS,
             session_provider=_FakeSessionProvider(),
             command_executor=_FakeCommandExecutor(),
-            transaction_runner=_FakeTransactionRunner(),
+            transaction_runner=_FakeTransactionRunner[str](),
         ).query(_SELECT_USERS)
     )
 
@@ -489,22 +493,33 @@ class _FakeSessionProvider:
 
 
 class _FakeCommandExecutor:
+    """The parameter names are part of the protocol.
+
+    These were `_session` / `_command` — the leading-underscore convention for "unused" — which made
+    this fake fail to satisfy `DbCommandExecutor`: the protocol declares them `session` / `command`, so
+    a caller passing keywords would break against this fake and not against a real executor. `del` says
+    "unused" without renaming anything.
+    """
+
     def __init__(self, failure: DbFailure | None = None) -> None:
         self._failure = failure
 
-    def query(self, _session: str, _command: DbCommand) -> DbResult[DbRowSet]:
+    def query(self, session: str, command: DbCommand) -> DbResult[DbRowSet]:
+        del session, command
         if self._failure is not None:
-            return DbResult.from_failure(self._failure)
+            return DbResult[DbRowSet].from_failure(self._failure)
         return DbResult.success(DbRowSet(rows=[{"id": 1}], metadata=_METADATA))
 
-    def execute(self, _session: str, _command: DbCommand) -> DbResult[DbExecutionSummary]:
+    def execute(self, session: str, command: DbCommand) -> DbResult[DbExecutionSummary]:
+        del session, command
         if self._failure is not None:
-            return DbResult.from_failure(self._failure)
+            return DbResult[DbExecutionSummary].from_failure(self._failure)
         return DbResult.success(DbExecutionSummary(affected_count=1, metadata=_METADATA))
 
-    def scalar(self, _session: str, _command: DbCommand) -> DbResult[DbScalar[object]]:
+    def scalar(self, session: str, command: DbCommand) -> DbResult[DbScalar[object]]:
+        del session, command
         if self._failure is not None:
-            return DbResult.from_failure(self._failure)
+            return DbResult[DbScalar[object]].from_failure(self._failure)
         return DbResult.success(DbScalar(value=1, metadata=_METADATA))
 
 
@@ -512,6 +527,6 @@ class _FakeTransactionRunner(Generic[S]):
     def run(
         self,
         context: DbTransactionContext[S],
-        body: Callable[[DbTransactionContext[S]], DbResult[object]],
-    ) -> DbResult[object]:
+        body: Callable[[DbTransactionContext[S]], DbResult[_T]],
+    ) -> DbResult[_T]:
         return body(context)

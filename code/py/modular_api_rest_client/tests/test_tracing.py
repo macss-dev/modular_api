@@ -16,7 +16,9 @@ import io
 import json
 import urllib.error
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
+from email.message import Message
+from typing import cast
 
 import pytest
 from opentelemetry import trace
@@ -24,7 +26,9 @@ from opentelemetry.propagate import set_global_textmap
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from opentelemetry.trace import SpanKind, StatusCode
+from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.trace import SpanContext, SpanKind, StatusCode
+from opentelemetry.util.types import AttributeValue
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 from modular_api_rest_client.client import (
@@ -53,11 +57,34 @@ def _reset() -> Iterator[None]:
     yield
 
 
-def _span_named(name: str):
+def _span_named(name: str) -> ReadableSpan | None:
     for span in _exporter.get_finished_spans():
         if span.name == name:
             return span
     return None
+
+
+# The SDK types are honestly optional — a span may have no context, no attributes. A test that named a
+# span and got nothing should say *that*, not fail with AttributeError on `None.trace_id` further down.
+def _require_span(name: str) -> ReadableSpan:
+    span = _span_named(name)
+    assert span is not None, f"no span named {name!r} was exported"
+    return span
+
+
+def _attributes(span: ReadableSpan) -> Mapping[str, AttributeValue]:
+    assert span.attributes is not None, f"span {span.name!r} carries no attributes"
+    return span.attributes
+
+
+def _context(span: ReadableSpan) -> SpanContext:
+    assert span.context is not None, f"span {span.name!r} has no context"
+    return span.context
+
+
+def _parent(span: ReadableSpan) -> SpanContext:
+    assert span.parent is not None, f"span {span.name!r} has no parent"
+    return span.parent
 
 
 class _FakeResponse(io.BytesIO):
@@ -76,11 +103,18 @@ class _FakeResponse(io.BytesIO):
         return None
 
 
-class _FakeHeaders(dict):
+class _FakeHeaders:
+    """What the client reads off a response: the content type and the header pairs.
+
+    Not a `dict` subclass. It was one, with an `items()` that returned a list instead of a
+    `dict_items` — a narrower return type than the base class promises, which is exactly the override
+    a caller holding it as a `dict` would be broken by.
+    """
+
     def get_content_type(self) -> str:
         return "application/json"
 
-    def items(self):  # noqa: ANN201
+    def items(self) -> list[tuple[str, str]]:
         return []
 
 
@@ -110,7 +144,10 @@ def _client(
             default_headers=default_headers or {},
         )
     )
-    client._opener = _FakeOpener(status=status, raises=raises)  # noqa: SLF001
+    # No injection seam exists for the opener, so the test reaches past the type. Recorded with a cast
+    # rather than left as a silent mismatch: the fake implements `open()` and nothing else of
+    # `OpenerDirector`, which is all the client calls.
+    client._opener = cast("urllib.request.OpenerDirector", _FakeOpener(status=status, raises=raises))  # noqa: SLF001
     return client
 
 
@@ -146,12 +183,12 @@ def test_emits_a_client_span_named_by_method_and_operation() -> None:
 def test_the_client_span_is_kind_client_and_a_child_of_the_server_span() -> None:
     _within_server_span(lambda: _call(_client()))
 
-    server = _span_named("POST /api/cuenta/get-cuenta-detalle")
-    client = _span_named("POST get-cuenta-detalle")
+    server = _require_span("POST /api/cuenta/get-cuenta-detalle")
+    client = _require_span("POST get-cuenta-detalle")
 
     assert client.kind is SpanKind.CLIENT
-    assert client.context.trace_id == server.context.trace_id
-    assert client.parent.span_id == server.context.span_id
+    assert _context(client).trace_id == _context(server).trace_id
+    assert _parent(client).span_id == _context(server).span_id
 
 
 def test_records_the_upstream_host_and_path_not_the_full_url() -> None:
@@ -159,10 +196,10 @@ def test_records_the_upstream_host_and_path_not_the_full_url() -> None:
     # what the conventions ask for and what is safe to store.
     _within_server_span(lambda: _call(_client()))
 
-    attributes = _span_named("POST get-cuenta-detalle").attributes
+    attributes = _attributes(_require_span("POST get-cuenta-detalle"))
 
     assert attributes["server.address"] == "impulsa.example"
-    assert "get-cuenta-detalle" in attributes["url.path"]
+    assert "get-cuenta-detalle" in str(attributes["url.path"])
     assert attributes["http.request.method"] == "POST"
 
 
@@ -171,35 +208,35 @@ def test_injects_traceparent_derived_from_the_client_span() -> None:
     # span, so a downstream hop attaches to the call rather than to its parent.
     _within_server_span(lambda: _call(_client()))
 
-    client = _span_named("POST get-cuenta-detalle")
+    client = _require_span("POST get-cuenta-detalle")
     traceparent = _sent.get("traceparent")
 
     assert traceparent is not None
-    assert f"{client.context.trace_id:032x}" in traceparent
-    assert f"{client.context.span_id:016x}" in traceparent
+    assert f"{_context(client).trace_id:032x}" in traceparent
+    assert f"{_context(client).span_id:016x}" in traceparent
 
 
 def test_a_500_from_upstream_sets_the_client_span_to_error() -> None:
     error = urllib.error.HTTPError(
-        "https://impulsa.example/api", 500, "boom", {}, io.BytesIO(b"")
+        "https://impulsa.example/api", 500, "boom", Message(), io.BytesIO(b"")
     )
     _within_server_span(lambda: _call(_client(raises=error)))
 
-    client = _span_named("POST get-cuenta-detalle")
+    client = _require_span("POST get-cuenta-detalle")
 
     assert client.status.status_code is StatusCode.ERROR
-    assert client.attributes["http.response.status_code"] == 500
+    assert _attributes(client)["http.response.status_code"] == 500
 
 
 def test_a_404_from_upstream_also_sets_error_unlike_a_server_span() -> None:
     # On a server span a 4xx is the caller's mistake. Here it means OUR outbound call failed,
     # which is a different thing and worth distinguishing in a waterfall.
     error = urllib.error.HTTPError(
-        "https://impulsa.example/api", 404, "missing", {}, io.BytesIO(b"")
+        "https://impulsa.example/api", 404, "missing", Message(), io.BytesIO(b"")
     )
     _within_server_span(lambda: _call(_client(raises=error)))
 
-    assert _span_named("POST get-cuenta-detalle").status.status_code is StatusCode.ERROR
+    assert _require_span("POST get-cuenta-detalle").status.status_code is StatusCode.ERROR
 
 
 def test_a_transport_failure_ends_the_span_with_error_and_no_status_code() -> None:
@@ -208,10 +245,10 @@ def test_a_transport_failure_ends_the_span_with_error_and_no_status_code() -> No
         lambda: _call(_client(raises=urllib.error.URLError("connection reset")))
     )
 
-    client = _span_named("POST get-cuenta-detalle")
+    client = _require_span("POST get-cuenta-detalle")
 
     assert client.status.status_code is StatusCode.ERROR
-    assert "http.response.status_code" not in client.attributes
+    assert "http.response.status_code" not in _attributes(client)
 
 
 def test_the_span_is_ended_which_is_the_g7_measurement() -> None:
@@ -219,7 +256,7 @@ def test_the_span_is_ended_which_is_the_g7_measurement() -> None:
     # everywhere else". The number itself is production's to report.
     _within_server_span(lambda: _call(_client()))
 
-    assert _span_named("POST get-cuenta-detalle").end_time is not None
+    assert _require_span("POST get-cuenta-detalle").end_time is not None
 
 
 # --- X-Request-ID forwarding (D23) ------------------------------------------

@@ -25,8 +25,12 @@ from __future__ import annotations
 import functools
 import os
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    import pyodbc
 
 
 def sqlserver_connection_string() -> str:
@@ -79,7 +83,7 @@ def require_sqlserver() -> None:
 
 
 @pytest.fixture(scope="module")
-def sqlserver_connection(require_sqlserver: None) -> Iterator["pyodbc.Connection"]:  # noqa: F821
+def sqlserver_connection(require_sqlserver: None) -> Iterator[pyodbc.Connection]:
     """An open connection to the shared SQL Server fixture."""
     import pyodbc
 

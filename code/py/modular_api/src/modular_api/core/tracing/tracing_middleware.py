@@ -47,11 +47,13 @@ def tracing_middleware(
     tracer: Tracer,
     policy: PropagationPolicy | None = None,
     excluded_routes: Sequence[str] = (),
-) -> Callable[[ASGIApp], ASGIApp]:
+) -> type:
     """Return a Starlette middleware class (not an instance).
 
     Mirrors ``logging_middleware``'s shape so ``add_middleware`` accepts it the same
-    way.
+    way — including the return annotation. `Callable[[ASGIApp], ASGIApp]` described a factory
+    function, which is not what `add_middleware` takes: it wants something it can call as
+    `cls(app=app, **kwargs)`, and only the class satisfies that.
     """
     effective_policy = policy or PropagationPolicy()
     excluded = set(excluded_routes)

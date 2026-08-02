@@ -125,18 +125,18 @@ def main() -> None:
         )
 
     captured = list(exporter.get_finished_spans())
-    spans = sorted(
-        (
-            {
-                "name": span.name,
-                "kind": span.kind.name.lower(),
-                "parent": _parent_name(span, captured),
-                "attributeKeys": sorted((span.attributes or {}).keys()),
-            }
-            for span in captured
-        ),
-        key=lambda entry: entry["name"],
-    )
+    # Bound to a name and sorted by an explicitly `str` key: the entries hold three different value
+    # types, so `entry["name"]` alone is a union that `sorted` cannot order.
+    entries: list[dict[str, object]] = [
+        {
+            "name": span.name,
+            "kind": span.kind.name.lower(),
+            "parent": _parent_name(span, captured),
+            "attributeKeys": sorted((span.attributes or {}).keys()),
+        }
+        for span in captured
+    ]
+    spans = sorted(entries, key=lambda entry: str(entry["name"]))
 
     # Sentinel-prefixed, because the framework logs its own JSON lines to stdout and the harness
     # must not have to guess which line is the payload.

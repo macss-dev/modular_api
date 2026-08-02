@@ -11,19 +11,21 @@ must run inside the server span's window.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 
 import pytest
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from opentelemetry.trace import SpanKind, StatusCode
+from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.trace import SpanContext, SpanKind, StatusCode
+from opentelemetry.util.types import AttributeValue
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from modular_api.core.tracing.propagation_policy import REQUEST_ID_HEADER
+from modular_api.core.tracing.propagation_policy import REQUEST_ID_HEADER, PropagationResult
 from modular_api.core.tracing.tracing_middleware import (
     PROPAGATION_RESULT_SCOPE_KEY,
     TRACING_SPAN_SCOPE_KEY,
@@ -46,11 +48,36 @@ def _clear_spans() -> Iterator[None]:
     yield
 
 
-def _span_named(name: str):
+def _span_named(name: str) -> ReadableSpan | None:
     for span in _exporter.get_finished_spans():
         if span.name == name:
             return span
     return None
+
+
+# Three readers rather than an `assert` at every call site. The SDK types are honestly optional — a span
+# may have no context, no parent, no attributes — but a test that named a span and got nothing should say
+# *that*, not fail with AttributeError several lines later on `None.trace_id`.
+def _require_span(name: str) -> ReadableSpan:
+    span = _span_named(name)
+    assert span is not None, f"no span named {name!r} was exported"
+    return span
+
+
+def _attributes(name: str) -> Mapping[str, AttributeValue]:
+    attributes = _require_span(name).attributes
+    assert attributes is not None, f"span {name!r} carries no attributes"
+    return attributes
+
+
+def _context(span: ReadableSpan) -> SpanContext:
+    assert span.context is not None, f"span {span.name!r} has no context"
+    return span.context
+
+
+def _parent(span: ReadableSpan) -> SpanContext:
+    assert span.parent is not None, f"span {span.name!r} has no parent"
+    return span.parent
 
 
 def _app(
@@ -94,13 +121,13 @@ def test_is_emitted_for_a_request_named_by_method_and_route() -> None:
 def test_is_a_server_span() -> None:
     _get(_app())
 
-    assert _span_named("GET /api/cuenta/ping").kind is SpanKind.SERVER
+    assert _require_span("GET /api/cuenta/ping").kind is SpanKind.SERVER
 
 
 def test_carries_method_path_and_status_code_attributes() -> None:
     _get(_app())
 
-    attributes = _span_named("GET /api/cuenta/ping").attributes
+    attributes = _attributes("GET /api/cuenta/ping")
 
     assert attributes["http.request.method"] == "GET"
     assert attributes["url.path"] == "/api/cuenta/ping"
@@ -110,14 +137,14 @@ def test_carries_method_path_and_status_code_attributes() -> None:
 def test_records_the_request_id_when_the_caller_sent_one() -> None:
     _get(_app(), headers={REQUEST_ID_HEADER: "order-42"})
 
-    attributes = _span_named("GET /api/cuenta/ping").attributes
+    attributes = _attributes("GET /api/cuenta/ping")
     assert attributes["http.request.header.x-request-id"] == "order-42"
 
 
 def test_omits_the_request_id_attribute_when_none_was_sent() -> None:
     _get(_app())
 
-    attributes = _span_named("GET /api/cuenta/ping").attributes
+    attributes = _attributes("GET /api/cuenta/ping")
     assert "http.request.header.x-request-id" not in attributes
 
 
@@ -129,18 +156,18 @@ def test_is_a_child_of_an_incoming_traceparent() -> None:
     # platform's request span rather than starting a new trace.
     _get(_app(), headers={"traceparent": TRACEPARENT})
 
-    span = _span_named("GET /api/cuenta/ping")
+    span = _require_span("GET /api/cuenta/ping")
 
-    assert f"{span.context.trace_id:032x}" == TRACE_ID
-    assert f"{span.parent.span_id:016x}" == PARENT_SPAN_ID
+    assert f"{_context(span).trace_id:032x}" == TRACE_ID
+    assert f"{_parent(span).span_id:016x}" == PARENT_SPAN_ID
 
 
 def test_is_a_root_span_when_no_trace_header_arrives() -> None:
     _get(_app())
 
-    span = _span_named("GET /api/cuenta/ping")
+    span = _require_span("GET /api/cuenta/ping")
 
-    assert f"{span.context.trace_id:032x}" != TRACE_ID
+    assert f"{_context(span).trace_id:032x}" != TRACE_ID
     assert span.parent is None
 
 
@@ -150,7 +177,7 @@ def test_is_a_root_span_when_no_trace_header_arrives() -> None:
 def test_a_5xx_response_sets_the_span_status_to_error() -> None:
     _get(_app(status=503))
 
-    assert _span_named("GET /api/cuenta/ping").status.status_code is StatusCode.ERROR
+    assert _require_span("GET /api/cuenta/ping").status.status_code is StatusCode.ERROR
 
 
 def test_a_4xx_response_does_not_set_error_status() -> None:
@@ -158,7 +185,7 @@ def test_a_4xx_response_does_not_set_error_status() -> None:
     # error-rate panel useless.
     _get(_app(status=404))
 
-    assert _span_named("GET /api/cuenta/ping").status.status_code is not StatusCode.ERROR
+    assert _require_span("GET /api/cuenta/ping").status.status_code is not StatusCode.ERROR
 
 
 def test_a_handler_that_raises_ends_the_span_with_error_status() -> None:
@@ -167,8 +194,7 @@ def test_a_handler_that_raises_ends_the_span_with_error_status() -> None:
 
     _get(_app(boom))
 
-    span = _span_named("GET /api/cuenta/ping")
-    assert span is not None
+    span = _require_span("GET /api/cuenta/ping")
     assert span.end_time is not None
     assert span.status.status_code is StatusCode.ERROR
 
@@ -218,11 +244,11 @@ def test_the_span_is_ambient_for_downstream_code() -> None:
 
     _get(_app(handler))
 
-    parent = _span_named("GET /api/cuenta/ping")
-    child = _span_named("downstream.work")
+    parent = _require_span("GET /api/cuenta/ping")
+    child = _require_span("downstream.work")
 
-    assert child.context.trace_id == parent.context.trace_id
-    assert child.parent.span_id == parent.context.span_id
+    assert _context(child).trace_id == _context(parent).trace_id
+    assert _parent(child).span_id == _context(parent).span_id
 
 
 def test_exposes_the_span_and_the_propagation_result_in_the_scope() -> None:
@@ -236,7 +262,9 @@ def test_exposes_the_span_and_the_propagation_result_in_the_scope() -> None:
     _get(_app(handler), headers={REQUEST_ID_HEADER: "order-42"})
 
     assert captured["span"] is not None
-    assert captured["propagation"].request_id == "order-42"
+    propagation = captured["propagation"]
+    assert isinstance(propagation, PropagationResult)
+    assert propagation.request_id == "order-42"
 
 
 # --- excluded routes --------------------------------------------------------

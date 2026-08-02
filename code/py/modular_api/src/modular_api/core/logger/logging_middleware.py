@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Callable, cast
+from typing import cast
 
 from opentelemetry import trace
 from starlette.requests import Request

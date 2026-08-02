@@ -17,10 +17,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Callable, Generic, TypeVar
+from typing import Any, Callable, Generic, TypeVar
 
 from opentelemetry import trace
 from opentelemetry.trace import Span, SpanKind, Status, StatusCode, Tracer
+from opentelemetry.util.types import AttributeValue
 
 from modular_api_postgres.db_client import (
     DbClient,
@@ -164,7 +165,11 @@ def _start_db_span(
     if not parent.is_recording():
         return None
 
-    attributes: dict[str, object] = {
+    # `AttributeValue`, not `object`: OpenTelemetry accepts only primitives and sequences of
+    # primitives, and silently drops an attribute whose value is anything else. Naming the type
+    # turns a dropped attribute — invisible at runtime, and exactly the kind of gap that makes an
+    # instrumentation look broken — into an error here.
+    attributes: dict[str, AttributeValue] = {
         "db.system.name": _DbTarget.SYSTEM_NAME,
         "db.namespace": target.namespace,
         "server.address": target.host,
@@ -192,7 +197,10 @@ def _start_db_span(
 
 def _end_db_span(
     span: Span | None,
-    result: DbResult[object],
+    # `DbResult[Any]`, not `DbResult[object]`: this helper never touches the value, only `is_failure`
+    # and `failure` — but `DbResult` is invariant, so `DbResult[object]` accepts none of the concrete
+    # results its five call sites hold.
+    result: DbResult[Any],
     returned_rows: int | None = None,
 ) -> None:
     """Record the outcome on ``span`` and end it.

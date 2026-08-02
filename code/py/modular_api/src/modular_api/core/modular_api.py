@@ -42,7 +42,11 @@ from modular_api.core.tracing.tracing_options import TracingOptions
 from modular_api.core.metrics.metric import Counter, Gauge, Histogram
 from modular_api.core.metrics.metric_registry import MetricRegistry, MetricsRegistrar
 from modular_api.core.module_builder import ModuleBuilder
-from modular_api.core.official_plugins import build_runtime_plugins, operational_route_paths
+from modular_api.core.official_plugins import (
+    OperationalRoutePaths,
+    build_runtime_plugins,
+    operational_route_paths,
+)
 from modular_api.core.plugin import (
     Plugin,
     PluginHostError,
@@ -348,20 +352,22 @@ class ModularApi:
         return path if path.startswith("/") else f"/{path}"
 
 
-def _tracing_excluded_routes(operational_paths: object) -> tuple[str, ...]:
+def _tracing_excluded_routes(operational_paths: OperationalRoutePaths) -> tuple[str, ...]:
     """Operational routes kept out of the trace store.
 
     Derived from ``operational_paths`` rather than hardcoded, so it cannot drift apart
     from the logger's own exclusions — health, docs, openapi and metrics are noise in a
     trace store.
     """
+    # The parameter was `object` with a `type: ignore` on each read. `OperationalRoutePaths` is what the
+    # caller already builds, so naming it makes all five reads checked instead of suppressed.
     paths = [
-        operational_paths.health_path,  # type: ignore[attr-defined]
-        operational_paths.docs_path,  # type: ignore[attr-defined]
-        operational_paths.openapi_json_path,  # type: ignore[attr-defined]
-        operational_paths.openapi_yaml_path,  # type: ignore[attr-defined]
+        operational_paths.health_path,
+        operational_paths.docs_path,
+        operational_paths.openapi_json_path,
+        operational_paths.openapi_yaml_path,
     ]
-    metrics_path = operational_paths.metrics_path  # type: ignore[attr-defined]
+    metrics_path = operational_paths.metrics_path
     if metrics_path is not None:
         paths.append(metrics_path)
     return tuple(paths)
