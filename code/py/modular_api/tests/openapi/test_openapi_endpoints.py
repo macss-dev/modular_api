@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import json
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from starlette.routing import Route
@@ -13,14 +14,32 @@ from modular_api.core.registry import (
     UseCaseRegistration,
     api_registry,
 )
+from modular_api.core.usecase import Input, Output, UseCase
 from modular_api.openapi.openapi import openapi_json_handler, openapi_yaml_handler
 
 
 # ── Helpers ───────────────────────────────────────────────────
 
 
-def _dummy_factory(json_data: dict) -> object:
-    return object()
+class _StubUseCase(UseCase[Input, Output]):
+    """The registry stores a factory; this spec test never calls it, but it must still type-check."""
+
+    def __init__(self, json_data: dict[str, Any]) -> None:
+        del json_data
+
+    @property
+    def input(self) -> Input:
+        raise NotImplementedError
+
+    def validate(self) -> str | None:
+        return None
+
+    async def execute(self) -> Output:
+        raise NotImplementedError
+
+
+def _dummy_factory(json_data: dict[str, Any]) -> UseCase[Input, Output]:
+    return _StubUseCase(json_data)
 
 
 def _register_ping_usecase() -> None:
@@ -44,14 +63,14 @@ def _register_ping_usecase() -> None:
     )
 
 
-def _json_client(**kwargs: object) -> TestClient:
+def _json_client(**kwargs: Any) -> TestClient:
     """Build a TestClient wrapping the JSON endpoint in a Route."""
     endpoint = openapi_json_handler(**kwargs)
     app = Route("/", endpoint=endpoint)
     return TestClient(app)
 
 
-def _yaml_client(**kwargs: object) -> TestClient:
+def _yaml_client(**kwargs: Any) -> TestClient:
     """Build a TestClient wrapping the YAML endpoint in a Route."""
     endpoint = openapi_yaml_handler(**kwargs)
     app = Route("/", endpoint=endpoint)
@@ -59,7 +78,7 @@ def _yaml_client(**kwargs: object) -> TestClient:
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry():
+def _clean_registry() -> Iterator[None]:
     api_registry.clear()
     yield
     api_registry.clear()

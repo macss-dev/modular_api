@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+from collections.abc import Awaitable, Iterable
 from dataclasses import dataclass, field
 from typing import Any, Callable, TypeAlias, cast
 
@@ -15,16 +16,34 @@ from graphql import (
     NoSchemaIntrospectionCustomRule,
     build_schema,
     default_field_resolver,
-    execute,
+    # graphql-core annotates `middleware` as a bare `Tuple`/`List`, so its own signature carries an
+    # unknown type parameter. Nothing on our side can resolve it; suppressed here rather than at each
+    # call site so there is one place to delete when upstream parameterises it.
+    execute,  # pyright: ignore[reportUnknownVariableType]
     parse,
     specified_rules,
     validate,
 )
-from graphql.language.ast import DocumentNode, FieldNode, FragmentDefinitionNode, SelectionSetNode
+from graphql.language.ast import (
+    DocumentNode,
+    FieldNode,
+    FragmentDefinitionNode,
+    FragmentSpreadNode,
+    InlineFragmentNode,
+    OperationDefinitionNode,
+    SelectionSetNode,
+)
 
 from modular_api.core.health.health_check import HealthCheck, HealthCheckResult, HealthStatus
 from modular_api.core.health.health_service import HealthService
-from modular_api.core.plugin import Plugin, PluginHost, PluginManifest, PluginRequestContext, PluginValidationResult
+from modular_api.core.plugin import (
+    Plugin,
+    PluginHost,
+    PluginManifest,
+    PluginRequestContext,
+    PluginRoute,
+    PluginValidationResult,
+)
 from modular_api.graphql.catalog import (
     GraphqlCatalog,
     GraphqlCatalogField,
@@ -67,6 +86,18 @@ _GRAPHQL_JSON_CONTENT_TYPE = "application/json; charset=utf-8"
 
 RuntimeFieldResolver: TypeAlias = Callable[..., Any]
 
+# What `_GRAPHQL_TOTAL_COUNT_THUNK_KEY` maps to in a collection envelope: a deferred count that is only
+# run when the query selected `totalCount`. Written by `_resolve_collection`, read by
+# `_total_count_resolver`; the sentinel key is private to this module, so this is the whole contract.
+_TotalCountThunk: TypeAlias = Callable[[], "Awaitable[int] | int"]
+
+
+def _new_relation_loaders() -> dict[str, _RelationBatchLoader]:
+    # A named factory rather than `default_factory=dict`: the bare `dict` gives the field an unknown
+    # value type, and `dict[str, _RelationBatchLoader]` cannot be used as the factory because
+    # `_RelationBatchLoader` is defined further down this module and the default is built at import.
+    return {}
+
 
 @dataclass(slots=True)
 class _GraphqlReadyState:
@@ -88,7 +119,7 @@ class _GraphqlRuntimeState:
 class _GraphqlExecutionContext:
     request: PluginRequestContext
     ready_state: _GraphqlReadyState
-    relation_loaders: dict[str, _RelationBatchLoader] = field(default_factory=dict)
+    relation_loaders: dict[str, _RelationBatchLoader] = field(default_factory=_new_relation_loaders)
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,14 +149,18 @@ class GraphqlRuntimePlugin(Plugin):
         async def _handler(context: PluginRequestContext) -> dict[str, object]:
             return await self._handle_request(context)
 
+        # `PluginRoute`, not a dict literal: `PluginHost.register_route` accepts only `PluginRoute`.
+        # The bundled host also takes a dict, but that is a widening in one implementation — any other
+        # host, including a test double, satisfies the contract by accepting `PluginRoute` alone. The
+        # five sibling official plugins already register this way.
         host.register_route(
-            {
-                "id": "graphql.endpoint",
-                "method": "POST",
-                "path": "/graphql",
-                "visibility": "transport",
-                "handler": _handler,
-            }
+            PluginRoute(
+                id="graphql.endpoint",
+                method="POST",
+                path="/graphql",
+                visibility="transport",
+                handler=_handler,
+            )
         )
 
     def validate(self, host: PluginHost) -> list[PluginValidationResult]:
@@ -247,7 +282,10 @@ class GraphqlRuntimePlugin(Plugin):
                     request_id=context.request_id,
                     method=context.method,
                     path=context.path,
-                    status_code=int(response["status"]),
+                    # Every return path of `_execute_request` sets an int status. The envelope is
+                    # `dict[str, object]` because that is the route handler contract, not because the
+                    # status could be something else.
+                    status_code=cast(int, response["status"]),
                 ),
             )
             return response
@@ -284,6 +322,12 @@ class GraphqlRuntimePlugin(Plugin):
                 )
 
     async def _execute_request(self, context: PluginRequestContext, ready: _GraphqlReadyState) -> dict[str, object]:
+        # Narrowed once rather than re-checked at each use. Reaching here means `setup` registered
+        # the route, which it only does when options exist — but the type cannot express that, and
+        # stating the invariant is better than five separate accesses that each look unguarded.
+        options = self._options
+        assert options is not None, "the GraphQL route is only registered when options are supplied"
+
         query = _read_query(context)
         if query is None:
             return {
@@ -298,11 +342,11 @@ class GraphqlRuntimePlugin(Plugin):
             return _graphql_ok_response(errors=[_format_graphql_error(error)])
 
         max_depth = _compute_document_depth(document)
-        if max_depth > self._options.max_depth:
+        if max_depth > options.max_depth:
             return _graphql_ok_response(
                 errors=[
                     _validation_error(
-                        f"Maximum operation depth of {self._options.max_depth} reached. Operation depth: {max_depth}.",
+                        f"Maximum operation depth of {options.max_depth} reached. Operation depth: {max_depth}.",
                         "queryDepthComplexity",
                     )
                 ]
@@ -312,18 +356,18 @@ class GraphqlRuntimePlugin(Plugin):
             ready.schema,
             document,
             tuple(specified_rules)
-            if self._options.introspection_enabled
+            if options.introspection_enabled
             else (*specified_rules, NoSchemaIntrospectionCustomRule),
         )
         if validation_errors:
             return _graphql_ok_response(errors=[_format_graphql_error(error) for error in validation_errors])
 
         complexity = _compute_document_complexity(document)
-        if complexity > self._options.max_complexity:
+        if complexity > options.max_complexity:
             return _graphql_ok_response(
                 errors=[
                     _validation_error(
-                        f"Maximum operation complexity of {self._options.max_complexity} reached. Operation complexity: {complexity}.",
+                        f"Maximum operation complexity of {options.max_complexity} reached. Operation complexity: {complexity}.",
                         "queryComplexity",
                     )
                 ]
@@ -510,9 +554,9 @@ def _build_resolver_registry(
         async def _total_count_resolver(source: Any, info: GraphQLResolveInfo, **args: Any) -> int:
             if not isinstance(source, dict):
                 return 0
-            thunk = source.get(_GRAPHQL_TOTAL_COUNT_THUNK_KEY)
+            thunk = cast("dict[object, object]", source).get(_GRAPHQL_TOTAL_COUNT_THUNK_KEY)
             if callable(thunk):
-                result = thunk()
+                result = cast(_TotalCountThunk, thunk)()
                 if inspect.isawaitable(result):
                     result = await result
                 return int(result)
@@ -556,7 +600,7 @@ async def _resolve_item(
                 field_nodes=info.field_nodes,
                 fragments=info.fragments,
             ),
-            key=dict(key),
+            key=dict(cast("dict[str, Any]", key)),
         ),
         context=_build_execution_context(execution_context.request),
     )
@@ -639,7 +683,7 @@ async def _resolve_relation(
     parent_values = _relation_parent_values(
         source_object=source_object,
         relation=relation,
-        parent=source,
+        parent=cast("dict[str, Any]", source),
     )
     loader = _relation_loader(
         execution_context=execution_context,
@@ -735,14 +779,14 @@ def _collect_selection_set(
         return
 
     for selection in selection_set.selections:
-        if selection.kind == "field":
-            field = cast(FieldNode, selection)
+        if isinstance(selection, FieldNode):
+            field = selection
             collected.setdefault(field.name.value, []).append(field)
             continue
-        if selection.kind == "inline_fragment":
+        if isinstance(selection, InlineFragmentNode):
             _collect_selection_set(selection.selection_set, fragments, collected, visited_fragments)
             continue
-        if selection.kind == "fragment_spread":
+        if isinstance(selection, FragmentSpreadNode):
             fragment_name = selection.name.value
             if fragment_name in visited_fragments:
                 continue
@@ -752,21 +796,23 @@ def _collect_selection_set(
                 _collect_selection_set(fragment.selection_set, fragments, collected, visited_fragments)
 
 
-def _parse_filter(object_: GraphqlPublishedObject, raw: Any) -> SqlFilterNode | None:
+def _parse_filter(object_: GraphqlPublishedObject, raw: object) -> SqlFilterNode | None:
     if raw is None:
         return None
     if not isinstance(raw, dict):
         raise _graphql_validation_error("graphql.filter", "GraphQL filter input must be an object.")
 
     nodes: list[SqlFilterNode] = []
-    for key, value in raw.items():
+    # A GraphQL input object arrives as an untyped mapping with string keys; the guard above is what
+    # establishes it, and the cast is what carries that fact to the reads below.
+    for key, value in cast("dict[str, object]", raw).items():
         if key == "and":
-            children = tuple(child for child in (_parse_filter(object_, item) for item in value or ()) if child is not None)
+            children = _parse_filter_operands(object_, value)
             if children:
                 nodes.append(SqlFilterGroup.and_(children))
             continue
         if key == "or":
-            children = tuple(child for child in (_parse_filter(object_, item) for item in value or ()) if child is not None)
+            children = _parse_filter_operands(object_, value)
             if children:
                 nodes.append(SqlFilterGroup.or_(children))
             continue
@@ -791,7 +837,7 @@ def _parse_filter(object_: GraphqlPublishedObject, raw: Any) -> SqlFilterNode | 
                 operator=_parse_filter_operator(str(operator_name)),
                 value=operator_value,
             )
-            for operator_name, operator_value in value.items()
+            for operator_name, operator_value in cast("dict[str, object]", value).items()
         )
         if len(conditions) == 1:
             nodes.append(conditions[0])
@@ -801,6 +847,17 @@ def _parse_filter(object_: GraphqlPublishedObject, raw: Any) -> SqlFilterNode | 
     if not nodes:
         return None
     return nodes[0] if len(nodes) == 1 else SqlFilterGroup.and_(tuple(nodes))
+
+
+def _parse_filter_operands(object_: GraphqlPublishedObject, value: object) -> tuple[SqlFilterNode, ...]:
+    """The operand list of an ``and`` / ``or`` filter group.
+
+    ``value or ()`` preserves the previous handling of a null or empty operand, and a non-iterable
+    operand still raises exactly as it did. GraphQL validates input shape before any resolver runs, so
+    that path is only reachable by bypassing the schema.
+    """
+    parsed = (_parse_filter(object_, item) for item in cast("Iterable[object]", value or ()))
+    return tuple(child for child in parsed if child is not None)
 
 
 def _parse_filter_operator(name: str) -> SqlFilterOperator:
@@ -822,18 +879,19 @@ def _parse_filter_operator(name: str) -> SqlFilterOperator:
     return mapping[name]
 
 
-def _parse_order_by(object_: GraphqlPublishedObject, raw: Any) -> tuple[SqlOrderByClause, ...]:
+def _parse_order_by(object_: GraphqlPublishedObject, raw: object) -> tuple[SqlOrderByClause, ...]:
     if raw is None:
         return ()
     if not isinstance(raw, list):
         raise _graphql_validation_error("graphql.orderBy", "GraphQL orderBy input must be a list.")
 
     clauses: list[SqlOrderByClause] = []
-    for entry in raw:
+    for entry in cast("list[object]", raw):
         if not isinstance(entry, dict):
             raise _graphql_validation_error("graphql.orderBy", "Each orderBy entry must be an object.")
-        field_name = entry.get("field")
-        direction = entry.get("direction")
+        entry_map = cast("dict[str, object]", entry)
+        field_name = entry_map.get("field")
+        direction = entry_map.get("direction")
         if not isinstance(field_name, str) or not isinstance(direction, str):
             raise _graphql_validation_error(
                 "graphql.orderBy",
@@ -853,7 +911,7 @@ def _parse_order_by(object_: GraphqlPublishedObject, raw: Any) -> tuple[SqlOrder
     return tuple(clauses)
 
 
-def _parse_page(object_: GraphqlPublishedObject, raw: Any, options: GraphqlOptions) -> SqlPage:
+def _parse_page(object_: GraphqlPublishedObject, raw: object, options: GraphqlOptions) -> SqlPage:
     effective_max = min(object_.capabilities.pagination.max_limit, options.max_limit)
     effective_default = min(object_.capabilities.pagination.default_limit, options.default_limit, effective_max)
 
@@ -862,8 +920,9 @@ def _parse_page(object_: GraphqlPublishedObject, raw: Any, options: GraphqlOptio
     if not isinstance(raw, dict):
         raise _graphql_validation_error("graphql.page", "GraphQL page input must be an object.")
 
-    limit = raw.get("limit", effective_default)
-    offset = raw.get("offset", 0)
+    page_map = cast("dict[str, object]", raw)
+    limit = page_map.get("limit", effective_default)
+    offset = page_map.get("offset", 0)
     if not isinstance(limit, int) or not isinstance(offset, int):
         raise _graphql_validation_error("graphql.page", "GraphQL page limit and offset must be integers.")
     if limit < 0 or offset < 0:
@@ -955,29 +1014,46 @@ def _object_by_id(catalog: GraphqlCatalog, object_id: str) -> GraphqlPublishedOb
 
 
 def _read_query(context: PluginRequestContext) -> str | None:
-    if isinstance(context.body, dict) and isinstance(context.body.get("query"), str):
-        return cast(str, context.body["query"])
+    body = _body_map(context.body)
+    if body is not None and isinstance(body.get("query"), str):
+        return cast(str, body["query"])
     query = context.query.get("query")
     return query if isinstance(query, str) else None
 
 
-def _read_operation_name(body: Any) -> str | None:
-    if isinstance(body, dict) and isinstance(body.get("operationName"), str):
-        return cast(str, body["operationName"])
+def _read_operation_name(body: object) -> str | None:
+    body_map = _body_map(body)
+    if body_map is not None and isinstance(body_map.get("operationName"), str):
+        return cast(str, body_map["operationName"])
     return None
 
 
-def _read_variables(body: Any) -> dict[str, Any] | None:
-    if isinstance(body, dict) and isinstance(body.get("variables"), dict):
-        return dict(cast(dict[str, Any], body["variables"]))
-    return None
+def _read_variables(body: object) -> dict[str, Any] | None:
+    body_map = _body_map(body)
+    if body_map is None:
+        return None
+    variables = body_map.get("variables")
+    return dict(cast("dict[str, Any]", variables)) if isinstance(variables, dict) else None
+
+
+def _body_map(body: object) -> dict[str, object] | None:
+    """A request body decoded as a JSON object, or ``None`` for anything else.
+
+    ``PluginRequestContext.body`` is deliberately ``Any`` — the transport decides what it holds. This is
+    the one place that narrows it, so the three readers above do not each re-establish the same fact.
+    """
+    return cast("dict[str, object]", body) if isinstance(body, dict) else None
 
 
 def _compute_document_depth(document: DocumentNode) -> int:
     fragments = _collect_fragments(document)
     max_depth = 0
     for definition in document.definitions:
-        if definition.kind != "operation_definition":
+        # `isinstance`, not `definition.kind != "operation_definition"`: only the class carries
+        # `selection_set`, and the string comparison narrowed nothing — the attribute read was
+        # unchecked. Same test at runtime, since `kind` is that class's own discriminator, and it
+        # matches how the two walkers below dispatch on selection nodes.
+        if not isinstance(definition, OperationDefinitionNode):
             continue
         max_depth = max(max_depth, _selection_set_depth(definition.selection_set, fragments, set(), 0))
     return max_depth
@@ -991,7 +1067,7 @@ def _selection_set_depth(
 ) -> int:
     max_depth = current_depth
     for selection in selection_set.selections:
-        if selection.kind == "field":
+        if isinstance(selection, FieldNode):
             next_depth = current_depth + 1
             max_depth = max(max_depth, next_depth)
             if selection.selection_set is not None:
@@ -1000,10 +1076,10 @@ def _selection_set_depth(
                     _selection_set_depth(selection.selection_set, fragments, visited_fragments, next_depth),
                 )
             continue
-        if selection.kind == "inline_fragment":
+        if isinstance(selection, InlineFragmentNode):
             max_depth = max(max_depth, _selection_set_depth(selection.selection_set, fragments, visited_fragments, current_depth))
             continue
-        if selection.kind == "fragment_spread":
+        if isinstance(selection, FragmentSpreadNode):
             fragment_name = selection.name.value
             if fragment_name in visited_fragments:
                 continue
@@ -1018,7 +1094,7 @@ def _compute_document_complexity(document: DocumentNode) -> int:
     fragments = _collect_fragments(document)
     complexity = 0
     for definition in document.definitions:
-        if definition.kind != "operation_definition":
+        if not isinstance(definition, OperationDefinitionNode):
             continue
         complexity += _selection_set_complexity(definition.selection_set, fragments, set(), 1)
     return complexity
@@ -1032,15 +1108,15 @@ def _selection_set_complexity(
 ) -> int:
     complexity = 0
     for selection in selection_set.selections:
-        if selection.kind == "field":
+        if isinstance(selection, FieldNode):
             complexity += current_depth
             if selection.selection_set is not None:
                 complexity += _selection_set_complexity(selection.selection_set, fragments, visited_fragments, current_depth + 1)
             continue
-        if selection.kind == "inline_fragment":
+        if isinstance(selection, InlineFragmentNode):
             complexity += _selection_set_complexity(selection.selection_set, fragments, visited_fragments, current_depth)
             continue
-        if selection.kind == "fragment_spread":
+        if isinstance(selection, FragmentSpreadNode):
             fragment_name = selection.name.value
             if fragment_name in visited_fragments:
                 continue
@@ -1055,7 +1131,7 @@ def _collect_fragments(document: DocumentNode) -> dict[str, FragmentDefinitionNo
     return {
         definition.name.value: definition
         for definition in document.definitions
-        if definition.kind == "fragment_definition"
+        if isinstance(definition, FragmentDefinitionNode)
     }
 
 

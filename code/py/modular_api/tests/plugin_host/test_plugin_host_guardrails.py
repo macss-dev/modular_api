@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
 from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -20,7 +20,7 @@ from modular_api.core.usecase_handler import usecase_handler
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry() -> None:
+def _clean_registry() -> Iterator[None]:
     api_registry.clear()
     yield
     api_registry.clear()

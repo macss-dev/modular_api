@@ -33,7 +33,7 @@ class ServiceClientConfig:
     service_id: str
     base_url: str
     redacted_summary: str
-    default_headers: Mapping[str, str] = field(default_factory=dict)
+    default_headers: Mapping[str, str] = field(default_factory=dict[str, str])
     auth_provider: ServiceAuthProvider | None = None
     timeout: float | None = None
     retry_policy: ServiceRetryPolicy | None = None
@@ -45,7 +45,7 @@ class ServiceClientConfig:
 class ServiceOperation:
     transport_id: str
     operation_id: str
-    headers: Mapping[str, str] = field(default_factory=dict)
+    headers: Mapping[str, str] = field(default_factory=dict[str, str])
     method: str | None = None
     path: str | None = None
     query: Mapping[str, object] | None = None
@@ -165,8 +165,8 @@ class GraphqlErrorLocation:
 @dataclass(frozen=True, slots=True)
 class GraphqlError:
     message: str
-    path: list[object] = field(default_factory=list)
-    locations: list[GraphqlErrorLocation] = field(default_factory=list)
+    path: list[object] = field(default_factory=list[object])
+    locations: list[GraphqlErrorLocation] = field(default_factory=list[GraphqlErrorLocation])
     extensions: dict[str, object] | None = None
 
 
@@ -199,7 +199,7 @@ class GraphqlClient:
         decoder: GraphqlDecoder[T] | None = None,
     ) -> ServiceResult[GraphqlResponse[T]]:
         if self._closed:
-            return ServiceResult.from_failure(
+            return ServiceResult[GraphqlResponse[T]].from_failure(
                 ServiceFailure(
                     category=ServiceFailureCategory.UNEXPECTED,
                     code="client_closed",
@@ -210,7 +210,7 @@ class GraphqlClient:
             )
 
         if _is_mutation_document(request.document or ""):
-            return ServiceResult.from_failure(
+            return ServiceResult[GraphqlResponse[T]].from_failure(
                 ServiceFailure(
                     category=ServiceFailureCategory.GRAPHQL,
                     code="mutation_not_supported",
@@ -247,13 +247,13 @@ class GraphqlClient:
                 header_map = _headers_to_record(response.headers)
                 envelope = _decode_envelope(response_text, response.headers.get_content_type())
                 if isinstance(envelope, ServiceFailure):
-                    result = ServiceResult.from_failure(envelope)
+                    result = ServiceResult[GraphqlResponse[T]].from_failure(envelope)
                 else:
                     decoded = _decode_data(envelope.get("data"), decoder)
                     if isinstance(decoded, ServiceFailure):
-                        result = ServiceResult.from_failure(decoded)
+                        result = ServiceResult[GraphqlResponse[T]].from_failure(decoded)
                     else:
-                        result = ServiceResult.success(
+                        result = ServiceResult[GraphqlResponse[T]].success(
                             GraphqlResponse(
                                 data=decoded,
                                 errors=_parse_errors(envelope.get("errors")),
@@ -269,7 +269,7 @@ class GraphqlClient:
                         )
         except urllib.error.HTTPError as error:
             details = error.read().decode("utf-8")
-            result = ServiceResult.from_failure(
+            result = ServiceResult[GraphqlResponse[T]].from_failure(
                 ServiceFailure(
                     category=_category_for_status(error.code),
                     code=_code_for_status(error.code),
@@ -283,7 +283,7 @@ class GraphqlClient:
         except urllib.error.URLError as error:
             reason = error.reason
             if isinstance(reason, (TimeoutError, socket.timeout)):
-                result = ServiceResult.from_failure(
+                result = ServiceResult[GraphqlResponse[T]].from_failure(
                     ServiceFailure(
                         category=ServiceFailureCategory.TIMEOUT,
                         code="timeout",
@@ -294,7 +294,7 @@ class GraphqlClient:
                     )
                 )
             else:
-                result = ServiceResult.from_failure(
+                result = ServiceResult[GraphqlResponse[T]].from_failure(
                     ServiceFailure(
                         category=ServiceFailureCategory.TRANSPORT,
                         code="transport_error",
@@ -305,7 +305,7 @@ class GraphqlClient:
                     )
                 )
         except (TimeoutError, socket.timeout) as error:
-            result = ServiceResult.from_failure(
+            result = ServiceResult[GraphqlResponse[T]].from_failure(
                 ServiceFailure(
                     category=ServiceFailureCategory.TIMEOUT,
                     code="timeout",
@@ -316,7 +316,7 @@ class GraphqlClient:
                 )
             )
         except Exception as error:  # noqa: BLE001
-            result = ServiceResult.from_failure(
+            result = ServiceResult[GraphqlResponse[T]].from_failure(
                 ServiceFailure(
                     category=ServiceFailureCategory.UNEXPECTED,
                     code="unexpected_error",
@@ -333,7 +333,7 @@ class GraphqlClient:
 
     def close(self) -> ServiceResult[None]:
         self._closed = True
-        return ServiceResult.success(None)
+        return ServiceResult[None].success(None)
 
     def _build_headers(self, request: GraphqlRequest) -> dict[str, str]:
         headers = {
@@ -459,33 +459,46 @@ def _decode_data(
 
 
 def _parse_errors(value: object | None) -> list[GraphqlError]:
+    """Parses the ``errors`` array of a GraphQL response.
+
+    Every value here arrives from JSON, so nothing may be assumed about its shape. The narrowing was
+    already correct — each access sat behind an ``isinstance`` — but a bare ``isinstance(x, dict)``
+    narrows only to ``dict[Unknown, Unknown]``, so the checker still could not see what came out. The
+    casts below carry the shape the guard has already established; they add no runtime behaviour and
+    replace four redundant re-checks of a condition the loop had already decided.
+    """
     if not isinstance(value, list):
         return []
 
     errors: list[GraphqlError] = []
-    for entry in value:
-        error = entry if isinstance(entry, dict) else {}
-        raw_locations = error.get("locations") if isinstance(error, dict) else None
-        locations: list[GraphqlErrorLocation] = []
-        if isinstance(raw_locations, list):
-            for location in raw_locations:
-                if isinstance(location, dict):
-                    line = location.get("line")
-                    column = location.get("column")
-                    locations.append(
-                        GraphqlErrorLocation(
-                            line=line if isinstance(line, int) else 0,
-                            column=column if isinstance(column, int) else 0,
-                        )
-                    )
+    for entry in cast("list[object]", value):
+        if not isinstance(entry, dict):
+            continue
+        error = cast("dict[str, object]", entry)
 
-        message = error.get("message", "Unknown GraphQL error") if isinstance(error, dict) else "Unknown GraphQL error"
+        locations: list[GraphqlErrorLocation] = []
+        raw_locations = error.get("locations")
+        if isinstance(raw_locations, list):
+            for raw_location in cast("list[object]", raw_locations):
+                if not isinstance(raw_location, dict):
+                    continue
+                location = cast("dict[str, object]", raw_location)
+                line = location.get("line")
+                column = location.get("column")
+                locations.append(
+                    GraphqlErrorLocation(
+                        line=line if isinstance(line, int) else 0,
+                        column=column if isinstance(column, int) else 0,
+                    )
+                )
+
+        raw_path = error.get("path")
         errors.append(
             GraphqlError(
-                message=str(message),
-                path=list(error.get("path", [])) if isinstance(error, dict) and isinstance(error.get("path"), list) else [],
+                message=str(error.get("message", "Unknown GraphQL error")),
+                path=list(cast("list[object]", raw_path)) if isinstance(raw_path, list) else [],
                 locations=locations,
-                extensions=_parse_extensions(error.get("extensions")) if isinstance(error, dict) else None,
+                extensions=_parse_extensions(error.get("extensions")),
             )
         )
 
@@ -495,7 +508,7 @@ def _parse_errors(value: object | None) -> list[GraphqlError]:
 def _parse_extensions(value: object | None) -> dict[str, object] | None:
     if not isinstance(value, dict):
         return None
-    return {str(key): item for key, item in value.items()}
+    return {str(key): item for key, item in cast("dict[object, object]", value).items()}
 
 
 def _is_mutation_document(document: str) -> bool:

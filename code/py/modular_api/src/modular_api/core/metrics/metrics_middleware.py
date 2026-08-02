@@ -12,11 +12,11 @@ Records per-request:
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from modular_api.core.metrics.metric import Counter, Gauge, Histogram
 from modular_api.core.metrics.metric_registry import MetricRegistry
@@ -61,10 +61,12 @@ def metrics_middleware(
             start = time.perf_counter()
             status_code = 500  # default for unhandled errors
 
-            async def send_wrapper(message: dict) -> None:
+            # `Message` is the ASGI event type `Send` expects; a bare `dict` made this wrapper
+            # unassignable to it. Same fix as the logging middleware.
+            async def send_wrapper(message: Message) -> None:
                 nonlocal status_code
                 if message["type"] == "http.response.start":
-                    status_code = message["status"]
+                    status_code = cast(int, message["status"])
                 await send(message)
 
             try:

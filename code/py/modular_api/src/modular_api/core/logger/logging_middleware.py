@@ -17,13 +17,12 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Callable
+from typing import cast
 
 from starlette.requests import Request
-from starlette.responses import Response
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from modular_api.core.logger.logger import LogLevel, RequestScopedLogger, WriteFn, _default_write
+from modular_api.core.logger.logger import LogLevel, RequestScopedLogger, WriteFn
 from modular_api.core.request_pipeline_audit import ensure_request_pipeline_audit
 
 # Key used in request.state to propagate the logger downstream.
@@ -76,7 +75,7 @@ def logging_middleware(
                 trace_id=trace_id,
                 log_level=log_level,
                 service_name=service_name,
-                write_fn=write_fn or _default_write,
+                write_fn=write_fn,
             )
 
             method = request.method.upper()
@@ -93,13 +92,18 @@ def logging_middleware(
             status_code = 500  # default for unhandled errors
 
             # Intercept the response start to capture status_code.
-            async def send_wrapper(message: dict) -> None:
+            # `Message` is the ASGI event type Starlette already declares, and it is what `Send`
+            # expects: a bare `dict` made this wrapper unassignable to `Send`, which is the signature
+            # the line below passes it as.
+            async def send_wrapper(message: Message) -> None:
                 nonlocal status_code
                 if message["type"] == "http.response.start":
-                    status_code = message["status"]
+                    status_code = cast(int, message["status"])
                     # Inject X-Request-ID header into the response.
-                    headers = list(message.get("headers", []))
-                    headers.append((b"x-request-id", trace_id.encode()))
+                    headers = [
+                        *cast("list[tuple[bytes, bytes]]", message.get("headers", [])),
+                        (b"x-request-id", trace_id.encode()),
+                    ]
                     message = {**message, "headers": headers}
                 await send(message)
 

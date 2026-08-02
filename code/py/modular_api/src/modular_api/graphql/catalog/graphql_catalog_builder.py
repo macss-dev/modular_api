@@ -7,15 +7,13 @@ from enum import Enum
 import hashlib
 import json
 import re
-from typing import Any
+from typing import Any, cast
 
 from modular_api.graphql.metadata import (
     GraphqlFieldMetadata,
-    GraphqlMetadataDiagnostic,
     GraphqlMetadataFile,
     GraphqlMetadataLimit,
     GraphqlObjectMetadata,
-    GraphqlRelationMetadata,
 )
 from modular_api.graphql.sqlserver.physical_model import (
     PhysicalCatalog,
@@ -786,7 +784,8 @@ class GraphqlCatalogBuilder:
 
     def _canonicalize(self, value: Any) -> Any:
         if isinstance(value, dict):
-            return {key: self._canonicalize(value[key]) for key in sorted(value)}
+            mapping = cast("dict[str, Any]", value)
+            return {key: self._canonicalize(mapping[key]) for key in sorted(mapping)}
         if isinstance(value, (list, tuple)):
-            return [self._canonicalize(entry) for entry in value]
+            return [self._canonicalize(entry) for entry in cast("list[Any] | tuple[Any, ...]", value)]
         return value

@@ -32,6 +32,9 @@ dependencies = [
 serve = ["uvicorn>=0.30"]
 graphql = ["json5>=0.9.14", "graphql-core>=3.2,<3.3"]
 dev = [
+    # Configured below at `typeCheckingMode = "strict"`. Declared here because a checker the
+    # repo configures and never installs is a checker that has never run.
+    "pyright>=1.1.400",
     "json5>=0.9.14",
     "graphql-core>=3.2,<3.3",
     "pytest>=8.0",
@@ -57,3 +60,35 @@ asyncio_mode = "auto"
 [tool.pyright]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
+
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportUnknownParameterType = false
+reportUnknownLambdaType = false
+reportMissingParameterType = false
+reportMissingTypeArgument = false
+# A pytest fixture is called by name through collection, never by a reference the checker can see, so
+# `reportUnusedFunction` reports every `autouse` fixture in this tree. Likewise a test that asserts a
+# class body raises a warning has to define a class it then never mentions. Both are the tool not
+# modelling pytest, not dead code. `reportUnusedImport` and `reportUnusedVariable` stay on — those do
+# find dead code, and they did.
+reportUnusedFunction = false
+reportUnusedClass = false
+# Tests legitimately reach into internals to exercise them directly. In `src/` this rule found real
+# coupling — a middleware importing another module's private default, a metric reading a private field
+# off a different object — and both were fixed rather than silenced.
+reportPrivateUsage = false
+# `example/` is documentation a consumer copies, not a published typed surface — same relaxed family
+# as `tests/`, and the same expectation that nothing which can indicate a real defect is silenced.
+[[tool.pyright.executionEnvironments]]
+root = "example"
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportUnknownParameterType = false
+reportUnknownLambdaType = false
+reportMissingParameterType = false
+reportMissingTypeArgument = false

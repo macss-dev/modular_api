@@ -6,6 +6,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any, cast
 
 from modular_api_rest_client import (
     HttpServiceClient,
@@ -61,7 +62,7 @@ def test_http_client_sends_a_get_request_decodes_json_and_preserves_metadata() -
                 query={"name": "ana"},
                 headers={"x-request": "test"},
             ),
-            decoder=lambda value: dict(value),
+            decoder=lambda value: dict(cast("dict[str, Any]", value)),
         )
 
         assert result.is_success is True
@@ -127,7 +128,7 @@ def test_http_client_injects_auth_headers_from_the_auth_provider() -> None:
                 method="GET",
                 path="/users",
             ),
-            decoder=lambda value: dict(value),
+            decoder=lambda value: dict(cast("dict[str, Any]", value)),
         )
 
         assert result.is_success is True

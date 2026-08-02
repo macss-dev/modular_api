@@ -8,7 +8,6 @@ Error message contract (identical across all 3 SDKs for parity):
   - Wrong JSON type:        "Field '{name}' must be of type {type}"
 """
 
-import json
 from typing import Any
 
 import pytest

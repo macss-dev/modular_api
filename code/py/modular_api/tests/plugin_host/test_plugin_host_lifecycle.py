@@ -12,6 +12,7 @@ from modular_api import (
     PluginHostError,
     PluginManifest,
     PluginRequirement,
+    PluginRoute,
     PluginValidationResult,
 )
 
@@ -209,11 +210,11 @@ class LateRegistrationPlugin(RecordingPlugin):
     def register_late_route(self) -> None:
         assert self._host is not None
         self._host.register_route(
-            {
-                "id": "late-route",
-                "method": "GET",
-                "path": "/late",
-                "visibility": "custom",
-                "handler": lambda _context: {"status": 200, "body": {"ok": True}},
-            }
+            PluginRoute(
+                id="late-route",
+                method="GET",
+                path="/late",
+                visibility="custom",
+                handler=lambda _context: {"status": 200, "body": {"ok": True}},
+            )
         )

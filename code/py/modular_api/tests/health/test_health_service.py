@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import asyncio
 
 from modular_api.core.health.health_check import (
@@ -143,7 +145,7 @@ class TestHealthResponse:
         assert j["status"] == "pass"
         assert j["version"] == "1.0.0"
         assert j["releaseId"] == "1.0.0-debug"
-        assert "db" in j["checks"]
+        assert "db" in cast("dict[str, object]", j["checks"])
 
     def test_http_200_for_pass(self) -> None:
         resp = HealthResponse(
