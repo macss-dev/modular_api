@@ -11,7 +11,7 @@ environment:
 
 dependencies:
   dart_odbc: ^6.2.0
-  modular_api: ^0.6.0
+  modular_api: ^0.7.0
 
 dev_dependencies:
   lints: ^5.0.0
