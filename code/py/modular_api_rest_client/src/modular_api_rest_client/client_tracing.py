@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 
 from opentelemetry import propagate, trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
+from opentelemetry.util.types import AttributeValue
 
 #: The header carrying a caller-supplied correlation id.
 REQUEST_ID_HEADER = "x-request-id"
@@ -63,7 +64,11 @@ class ClientCallTracing:
             return cls(None)
 
         target = urlparse(url)
-        attributes: dict[str, object] = {"http.request.method": method}
+        # `AttributeValue`, not `object`: OpenTelemetry accepts only primitives and sequences of
+        # primitives, and silently drops an attribute whose value is anything else. Naming the type
+        # turns a dropped attribute — invisible at runtime, and exactly the kind of gap that makes an
+        # instrumentation look broken — into an error here.
+        attributes: dict[str, AttributeValue] = {"http.request.method": method}
         if target.hostname:
             # server.address plus url.path rather than the full URL, which can carry
             # identifiers in its path or query.
