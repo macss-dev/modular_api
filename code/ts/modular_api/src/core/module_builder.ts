@@ -23,9 +23,9 @@ export interface UseCaseOptions {
   /** Override output schema for OpenAPI (if fromJson fails with empty data) */
   outputSchema?: Record<string, unknown>;
   /** Input class for pre-validation and schema extraction (enables strict fromJson). */
-  inputClass: abstract new (...args: unknown[]) => Input;
+  inputClass: abstract new (...args: never[]) => Input;
   /** Output class for schema extraction. */
-  outputClass: abstract new (...args: unknown[]) => Output;
+  outputClass: abstract new (...args: never[]) => Output;
 }
 
 /**
@@ -106,8 +106,8 @@ export class ModuleBuilder {
    * Uses @Field metadata from inputClass/outputClass to build schemas.
    */
   private _extractSchemas<I extends Input, O extends Output>(
-    inputClass: abstract new (...args: unknown[]) => Input,
-    outputClass: abstract new (...args: unknown[]) => Output,
+    inputClass: abstract new (...args: never[]) => Input,
+    outputClass: abstract new (...args: never[]) => Output,
   ): { input: Record<string, unknown>; output: Record<string, unknown> } {
     let input: Record<string, unknown> = {};
     let output: Record<string, unknown> = {};

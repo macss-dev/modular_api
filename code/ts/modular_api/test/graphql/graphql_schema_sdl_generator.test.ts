@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   GraphqlCatalogBuildMode,
+  GraphqlCatalogFieldVisibility,
   GraphqlCatalogIdentityMode,
   GraphqlCatalogOrigin,
   GraphqlCatalogPaginationMode,
@@ -9,6 +10,7 @@ import {
   GraphqlSchemaSdlGenerator,
   PhysicalObjectKind,
   type GraphqlCatalog,
+  type GraphqlCatalogField,
 } from '../../src';
 
 describe('GraphqlSchemaSdlGenerator', () => {
@@ -391,7 +393,7 @@ function catalogFixture(): GraphqlCatalog {
           field('Sku', 'sku', 'String', false),
           field('Quantity', 'quantity', 'Int', false),
           field('CustomerId', 'customerId', 'Int', false, {
-            visibility: 'hidden',
+            visibility: GraphqlCatalogFieldVisibility.Hidden,
             filterable: false,
             sortable: false,
           }),
@@ -429,17 +431,20 @@ function field(
   type: string,
   nullable: boolean,
   overrides?: {
-    visibility?: 'public' | 'hidden';
+    visibility?: GraphqlCatalogFieldVisibility;
     filterable?: boolean;
     sortable?: boolean;
   },
-) {
+): GraphqlCatalogField {
   return {
     column,
     publicName,
     type,
     nullable,
-    visibility: overrides?.visibility ?? 'public',
+    // The enum, not the raw string. A TypeScript string enum is not assignable from its own literal
+    // value, so `'public'` here silently produced a helper whose result was not a
+    // `GraphqlCatalogField` at all — the return type annotation above is what keeps that honest.
+    visibility: overrides?.visibility ?? GraphqlCatalogFieldVisibility.Public,
     filterable: overrides?.filterable ?? true,
     sortable: overrides?.sortable ?? true,
     sensitive: false,

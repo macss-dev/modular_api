@@ -129,7 +129,7 @@ class RecordingPlugin implements Plugin {
 
   readonly manifest: PluginManifest;
 
-  constructor(id: string, private readonly events?: string[]) {
+  constructor(id: string, protected readonly events?: string[]) {
     this.manifest = {
       id,
       displayName: 'Recording Plugin',

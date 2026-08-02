@@ -23,7 +23,9 @@
     "build": "tsc --project tsconfig.build.json",
     "prepublishOnly": "npm run build",
     "dev": "ts-node src/index.ts",
-    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && vitest run",
+    "test:unit": "vitest run",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

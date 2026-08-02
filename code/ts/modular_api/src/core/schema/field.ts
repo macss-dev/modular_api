@@ -153,7 +153,7 @@ export const Field = {
  * Retrieves the `@Field` metadata registered on a class.
  * Returns an empty array if the class has no decorated fields.
  */
-export function getFieldMetadata(target: abstract new (...args: unknown[]) => unknown): FieldMeta[] {
+export function getFieldMetadata(target: abstract new (...args: never[]) => unknown): FieldMeta[] {
   const metadata = (target as unknown as Record<symbol, Record<symbol, FieldMeta[]>>)[Symbol.metadata];
   return metadata?.[FIELD_KEY] ?? [];
 }
