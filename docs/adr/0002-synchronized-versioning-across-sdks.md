@@ -6,6 +6,10 @@ Date: 2026-04-24
 
 Accepted
 
+Amended by [ADR-0006](0006-per-project-versioning-across-the-three-sdks.md), which keeps the decision
+below — the three SDKs of one package share a version — and drops the extension that made all fifteen
+packages share one. ADR-0002 stays in force until ADR-0006 is accepted.
+
 ## Context
 
 modular_api is published as three SDKs: Dart (pub.dev), TypeScript (npm), and Python (PyPI). On 2026-03-30, version 0.4.5 of the TypeScript package was published to npm with a stale `dist/` directory — the build artifacts did not include `Field.object()` or body-parser error handler changes that were already committed and documented in the CHANGELOG. Dart and Python 0.4.5 were published correctly because their ecosystems publish source code directly (pub.dev publishes `.dart` files; PyPI publishes via `python -m build` which always rebuilds).
