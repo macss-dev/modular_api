@@ -50,6 +50,15 @@ class LabeledCounter:
     def value(self) -> float:
         return self._value
 
+    @property
+    def labels(self) -> dict[str, str]:
+        """The label set this child holds, copied — the parent's ``collect()`` reads it.
+
+        A read property for the same reason ``value`` is one: the parent was reaching into ``_labels``,
+        which is private to this class and belongs to a different object than the one reading it.
+        """
+        return dict(self._labels)
+
     def inc(self, amount: float = 1) -> None:
         """Increments by *amount* (must be > 0)."""
         if amount <= 0:
@@ -92,7 +101,7 @@ class Counter:
         return [
             MetricSample(
                 name=self.name,
-                labels=dict(child._labels),
+                labels=child.labels,
                 value=child.value,
                 suffix="",
             )
@@ -115,6 +124,11 @@ class LabeledGauge:
     @property
     def value(self) -> float:
         return self._value
+
+    @property
+    def labels(self) -> dict[str, str]:
+        """The label set this child holds, copied — see ``LabeledCounter.labels``."""
+        return dict(self._labels)
 
     def set(self, v: float) -> None:
         self._value = float(v)
@@ -164,7 +178,7 @@ class Gauge:
         return [
             MetricSample(
                 name=self.name,
-                labels=dict(child._labels),
+                labels=child.labels,
                 value=child.value,
                 suffix="",
             )

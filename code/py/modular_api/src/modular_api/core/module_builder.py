@@ -15,9 +15,8 @@ Mirror of ``ModuleBuilder`` in Dart and TypeScript.
 
 from __future__ import annotations
 
-import inspect
 import typing
-from typing import Any, Callable
+from typing import Any, Protocol, cast
 
 from starlette.routing import Route, Router
 
@@ -27,11 +26,23 @@ from modular_api.core.registry import (
     UseCaseRegistration,
     api_registry,
 )
-from modular_api.core.usecase import Input, Output, UseCase
+from modular_api.core.usecase import UseCase
 from modular_api.core.usecase_handler import usecase_handler
 
 
-def _get_return_type_hint(factory: Callable) -> type | None:  # noqa: ANN401
+class _SchemaBearingDto(Protocol):
+    """What ``_extract_schemas`` needs from a DTO class: the schema it derives from its fields.
+
+    ``Input`` and ``Output`` both provide it. Written as a protocol rather than naming those two
+    classes because the candidates arrive from runtime reflection over ``__orig_bases__``, which cannot
+    prove what they are — the ``hasattr`` check at the call site is what establishes this much.
+    """
+
+    @classmethod
+    def to_schema(cls) -> dict[str, object]: ...
+
+
+def _get_return_type_hint(factory: UseCaseFactory) -> type[UseCase[Any, Any]] | None:
     """Extract the UseCase class from the factory callable.
 
     Our convention: factories are classmethods like ``HelloWorld.from_json``.
@@ -40,14 +51,15 @@ def _get_return_type_hint(factory: Callable) -> type | None:  # noqa: ANN401
     # Bound classmethod: StubUseCase.from_json → __self__ is StubUseCase
     owner = getattr(factory, "__self__", None)
     if isinstance(owner, type) and issubclass(owner, UseCase):
-        return owner
+        # `issubclass` proves the class but not its type arguments, which reflection cannot recover.
+        return cast("type[UseCase[Any, Any]]", owner)
 
     # Fallback: try return type hint resolution
     try:
         hints = typing.get_type_hints(factory)
         ret = hints.get("return")
         if isinstance(ret, type) and issubclass(ret, UseCase):
-            return ret
+            return cast("type[UseCase[Any, Any]]", ret)
     except Exception:
         pass
 
@@ -162,13 +174,13 @@ class ModuleBuilder:
 
             if input_cls is not None and hasattr(input_cls, "to_schema"):
                 try:
-                    input_schema = input_cls.to_schema()
+                    input_schema = cast("type[_SchemaBearingDto]", input_cls).to_schema()
                 except Exception:
                     pass
 
             if output_cls is not None and hasattr(output_cls, "to_schema"):
                 try:
-                    output_schema = output_cls.to_schema()
+                    output_schema = cast("type[_SchemaBearingDto]", output_cls).to_schema()
                 except Exception:
                     pass
 

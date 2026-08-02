@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from modular_api.core.usecase import Input, Output, UseCase
+from modular_api.core.usecase import UseCase
 
 # Type alias — same as in usecase_handler.py.
 UseCaseFactory = Callable[[dict[str, Any]], UseCase[Any, Any]]
@@ -42,7 +42,7 @@ class UseCaseRegistration:
     method: str  # uppercase: "POST" | "GET" | "PUT" | "PATCH" | "DELETE"
     path: str  # e.g. "/api/v1/greetings/hello-world"
     factory: UseCaseFactory
-    schemas: dict[str, dict[str, Any]] = field(default_factory=dict)
+    schemas: dict[str, dict[str, Any]] = field(default_factory=dict[str, dict[str, Any]])
     doc: UseCaseDocMeta | None = None
 
 

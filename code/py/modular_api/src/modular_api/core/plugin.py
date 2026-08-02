@@ -6,7 +6,7 @@ import asyncio
 import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
@@ -39,8 +39,8 @@ class PluginManifest:
     display_name: str
     version: str
     host_api_version: str
-    requires: list[PluginRequirement] = field(default_factory=list)
-    optional: list[PluginRequirement] = field(default_factory=list)
+    requires: list[PluginRequirement] = field(default_factory=list[PluginRequirement])
+    optional: list[PluginRequirement] = field(default_factory=list[PluginRequirement])
     contributes: dict[str, Any] | None = None
 
 
@@ -454,8 +454,19 @@ class RuntimePluginHost(PluginHost):
     def shutdown_sync(self) -> None:
         for callback in reversed(self._shutdown_callbacks):
             result = callback()
-            if inspect.isawaitable(result):
+            # `iscoroutine`, not `isawaitable`. `asyncio.run` accepts a coroutine specifically — a
+            # callback returning some other awaitable (a Future, an object with `__await__`) would
+            # have satisfied `isawaitable` and then failed inside `run`. Anything awaitable but not a
+            # coroutine is driven through a coroutine wrapper instead.
+            if inspect.iscoroutine(result):
                 asyncio.run(result)
+            elif inspect.isawaitable(result):
+                awaitable = result
+
+                async def _drive() -> None:
+                    await awaitable
+
+                asyncio.run(_drive())
 
     def _assert_mutable(self) -> None:
         if self._frozen:
@@ -495,9 +506,13 @@ def _build_plugin_route_handler(
             return result
 
         if isinstance(result, dict):
-            status = int(result.get("status", 200))
-            headers = result.get("headers") or None
-            body_value = result.get("body")
+            # A plugin handler returns whatever it likes; this is the boundary that turns the response
+            # envelope into a transport response. The casts state the envelope's expected shape — a
+            # value that does not match still fails here exactly as it did before.
+            envelope = cast("dict[str, object]", result)
+            status = int(cast("int | str", envelope.get("status", 200)))
+            headers = cast("dict[str, str] | None", envelope.get("headers")) or None
+            body_value = envelope.get("body")
             if body_value is None:
                 return Response(status_code=status, headers=headers)
             if isinstance(body_value, (str, bytes)):

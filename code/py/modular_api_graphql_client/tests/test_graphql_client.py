@@ -5,6 +5,7 @@ import threading
 import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any, cast
 
 from modular_api_graphql_client import (
     GraphqlClient,
@@ -69,7 +70,7 @@ def test_graphql_client_sends_a_post_request_and_decodes_the_envelope() -> None:
                 variables={"limit": 10},
                 headers={"x-request": "test"},
             ),
-            decoder=lambda value: dict(value or {}),
+            decoder=lambda value: dict(cast("dict[str, Any]", value or {})),
         )
 
         assert result.is_success is True
@@ -150,7 +151,7 @@ def test_graphql_client_injects_auth_headers_from_the_auth_provider() -> None:
                 operation_id="users.auth",
                 document="query Viewer { viewer { id } }",
             ),
-            decoder=lambda value: dict(value or {}),
+            decoder=lambda value: dict(cast("dict[str, Any]", value or {})),
         )
 
         assert result.is_success is True

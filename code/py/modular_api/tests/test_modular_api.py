@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from collections.abc import Iterator
 import pytest
-from starlette.requests import Request
-from starlette.responses import PlainTextResponse
 from starlette.testclient import TestClient
 
 from modular_api.core.health.health_check import HealthCheck, HealthCheckResult, HealthStatus
@@ -64,13 +65,13 @@ class _AlwaysHealthyCheck(HealthCheck):
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry():
+def _clean_registry() -> Iterator[None]:
     api_registry.clear()
     yield
     api_registry.clear()
 
 
-def _make_api(**overrides: object) -> ModularApi:
+def _make_api(**overrides: Any) -> ModularApi:
     """Create a ModularApi with sensible defaults."""
     defaults: dict = {
         "base_path": "/api",
@@ -153,7 +154,7 @@ class TestModularApiMetrics:
 class TestAutoMountedEndpoints:
     """build() auto-mounts operational endpoints under the shared base_path."""
 
-    def _build_client(self, **api_options: object) -> TestClient:
+    def _build_client(self, **api_options: Any) -> TestClient:
         api = _make_api(**api_options)
         api.module("test", lambda m: m.usecase("ping", _PingUseCase.from_json))
         app = api.build()
@@ -215,7 +216,7 @@ class TestAutoMountedEndpoints:
 class TestCustomServers:
     """ModularApi propagates servers to the OpenAPI spec."""
 
-    def _build_client(self, **api_options: object) -> TestClient:
+    def _build_client(self, **api_options: Any) -> TestClient:
         api = _make_api(**api_options)
         api.module("test", lambda m: m.usecase("ping", _PingUseCase.from_json))
         app = api.build()

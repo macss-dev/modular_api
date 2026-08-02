@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from collections.abc import Iterator
 import pytest
 
 from modular_api.core.registry import (
-    ApiRegistry,
     UseCaseDocMeta,
     UseCaseRegistration,
     api_registry,
@@ -20,7 +22,7 @@ def _dummy_factory(json: dict) -> object:
     return object()
 
 
-def _make_registration(**overrides: object) -> UseCaseRegistration:
+def _make_registration(**overrides: Any) -> UseCaseRegistration:
     defaults: dict = {
         "module": "users",
         "command": "create",
@@ -49,7 +51,7 @@ def _make_registration(**overrides: object) -> UseCaseRegistration:
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry():
+def _clean_registry() -> Iterator[None]:
     api_registry.clear()
     yield
     api_registry.clear()

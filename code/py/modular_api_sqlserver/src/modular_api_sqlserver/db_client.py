@@ -4,9 +4,11 @@ import os
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Generic, Mapping, Protocol, TypeVar, cast
+from typing import Callable, Generic, Mapping, Protocol, TypeVar, cast
 
 S = TypeVar("S")
+#: Contravariant because the protocols below only ever *accept* a session, never return one.
+S_contra = TypeVar("S_contra", contravariant=True)
 T = TypeVar("T")
 R = TypeVar("R")
 _MISSING = object()
@@ -52,7 +54,7 @@ class DbConnectionSettings:
     username: str
     password: str
     driver: str
-    options: Mapping[str, object] = field(default_factory=dict)
+    options: Mapping[str, object] = field(default_factory=dict[str, object])
 
     @classmethod
     def from_environment(
@@ -206,18 +208,18 @@ class DbResult(Generic[T]):
 
     def map(self, transform: Callable[[T], R]) -> DbResult[R]:
         if self.is_failure:
-            return DbResult.from_failure(self.failure)
-        return DbResult.success(transform(self.value))
+            return DbResult[R].from_failure(self.failure)
+        return DbResult[R].success(transform(self.value))
 
     def flat_map(self, transform: Callable[[T], DbResult[R]]) -> DbResult[R]:
         if self.is_failure:
-            return DbResult.from_failure(self.failure)
+            return DbResult[R].from_failure(self.failure)
         return transform(self.value)
 
     def map_failure(self, transform: Callable[[DbFailure], DbFailure]) -> DbResult[T]:
         if self.is_success:
-            return DbResult.success(self.value)
-        return DbResult.from_failure(transform(self.failure))
+            return DbResult[T].success(self.value)
+        return DbResult[T].from_failure(transform(self.failure))
 
     def get_or_throw(self, message: str | None = None) -> T:
         if self.is_failure:
@@ -247,7 +249,7 @@ class DbSessionLease(Generic[S]):
 
     def release(self) -> DbResult[None]:
         if not self.owned_by_package:
-            return DbResult.success(None)
+            return DbResult[None].success(None)
         return self._releaser()
 
 
@@ -259,12 +261,16 @@ class DbSessionProvider(Protocol[S]):
     def describe(self) -> DbProviderDescription: ...
 
 
-class DbCommandExecutor(Protocol[S]):
-    def query(self, session: S, command: DbCommand) -> DbResult[DbRowSet]: ...
+class DbCommandExecutor(Protocol[S_contra]):
+    def query(self, session: S_contra, command: DbCommand) -> DbResult[DbRowSet]: ...
 
-    def execute(self, session: S, command: DbCommand) -> DbResult[DbExecutionSummary]: ...
+    def execute(
+        self, session: S_contra, command: DbCommand
+    ) -> DbResult[DbExecutionSummary]: ...
 
-    def scalar(self, session: S, command: DbCommand) -> DbResult[DbScalar[object]]: ...
+    def scalar(
+        self, session: S_contra, command: DbCommand
+    ) -> DbResult[DbScalar[object]]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -279,8 +285,8 @@ class DbTransactionContext(Generic[S]):
     def execute(self, command: DbCommand) -> DbResult[DbExecutionSummary]:
         return self.command_executor.execute(self.session, command)
 
-    def scalar(self, command: DbCommand) -> DbResult[DbScalar[T]]:
-        return cast(DbResult[DbScalar[T]], self.command_executor.scalar(self.session, command))
+    def scalar(self, command: DbCommand) -> DbResult[DbScalar[object]]:
+        return self.command_executor.scalar(self.session, command)
 
 
 class DbTransactionRunner(Protocol[S]):
@@ -315,13 +321,10 @@ class DbRepository(Generic[S]):
             lambda lease: self.context.command_executor.execute(lease.session, command),
         )
 
-    def scalar(self, command: DbCommand) -> DbResult[DbScalar[T]]:
-        return cast(
-            DbResult[DbScalar[T]],
-            _with_lease(
-                self.context.session_provider,
-                lambda lease: self.context.command_executor.scalar(lease.session, command),
-            ),
+    def scalar(self, command: DbCommand) -> DbResult[DbScalar[object]]:
+        return _with_lease(
+            self.context.session_provider,
+            lambda lease: self.context.command_executor.scalar(lease.session, command),
         )
 
     def transaction(self, body: Callable[[DbTransactionContext[S]], DbResult[T]]) -> DbResult[T]:
@@ -360,19 +363,16 @@ class DbClient(Generic[S]):
             lambda lease: self.command_executor.execute(lease.session, command),
         )
 
-    def scalar(self, command: DbCommand) -> DbResult[DbScalar[T]]:
-        return cast(
-            DbResult[DbScalar[T]],
-            _with_lease(
-                self.session_provider,
-                lambda lease: self.command_executor.scalar(lease.session, command),
-            ),
+    def scalar(self, command: DbCommand) -> DbResult[DbScalar[object]]:
+        return _with_lease(
+            self.session_provider,
+            lambda lease: self.command_executor.scalar(lease.session, command),
         )
 
     def transaction(self, body: Callable[[DbTransactionContext[S]], DbResult[T]]) -> DbResult[T]:
         lease_result = self.session_provider.acquire()
         if lease_result.is_failure:
-            return DbResult.from_failure(lease_result.failure)
+            return DbResult[T].from_failure(lease_result.failure)
 
         lease = lease_result.value
         context = DbTransactionContext(
@@ -384,9 +384,9 @@ class DbClient(Generic[S]):
         release_result = lease.release()
 
         if result.is_failure:
-            return DbResult.from_failure(result.failure)
+            return DbResult[T].from_failure(result.failure)
         if release_result.is_failure:
-            return DbResult.from_failure(release_result.failure)
+            return DbResult[T].from_failure(release_result.failure)
         return result
 
     def repository_context(self) -> DbRepositoryContext[S]:
@@ -457,14 +457,14 @@ def _with_lease(
 ) -> DbResult[T]:
     lease_result = session_provider.acquire()
     if lease_result.is_failure:
-        return DbResult.from_failure(lease_result.failure)
+        return DbResult[T].from_failure(lease_result.failure)
 
     lease = lease_result.value
     operation_result = operation(lease)
     release_result = lease.release()
 
     if operation_result.is_failure:
-        return DbResult.from_failure(operation_result.failure)
+        return DbResult[T].from_failure(operation_result.failure)
     if release_result.is_failure:
-        return DbResult.from_failure(release_result.failure)
+        return DbResult[T].from_failure(release_result.failure)
     return operation_result

@@ -72,7 +72,8 @@ class CurrentTime(UseCase[CurrentTimeInput, CurrentTimeOutput]):
         adjusted = now_utc + timedelta(hours=offset_hours)  # type: ignore[arg-type]
         iso = adjusted.strftime("%Y-%m-%dT%H:%M:%S")
 
-        self.logger.info(f"Time requested for offset {offset_hours}")
+        if self.logger is not None:
+            self.logger.info(f"Time requested for offset {offset_hours}")
         return CurrentTimeOutput(datetime=iso, offset=offset_hours)  # type: ignore[arg-type]
 
     @staticmethod

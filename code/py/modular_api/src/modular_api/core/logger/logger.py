@@ -72,12 +72,15 @@ class RequestScopedLogger:
         trace_id: str,
         log_level: LogLevel,
         service_name: str,
-        write_fn: WriteFn = _default_write,
+        # `None` selects the default sink, so a caller holding an optional write function can pass it
+        # straight through instead of importing the module-private default. This is what the TypeScript
+        # constructor already does with an omitted `writeFn` and Dart with an omitted `LogSink`.
+        write_fn: WriteFn | None = None,
     ) -> None:
         self._trace_id = trace_id
         self._log_level = log_level
         self._service_name = service_name
-        self._write_fn = write_fn
+        self._write_fn: WriteFn = _default_write if write_fn is None else write_fn
 
     @property
     def trace_id(self) -> str:

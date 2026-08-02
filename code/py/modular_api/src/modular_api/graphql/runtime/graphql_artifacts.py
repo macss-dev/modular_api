@@ -7,7 +7,7 @@ import inspect
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Coroutine, cast
 
 from modular_api.graphql.catalog import (
     GraphqlCatalog,
@@ -165,7 +165,9 @@ def resolve_catalog_from_artifacts_or_source(options: GraphqlOptions) -> Graphql
 
 def _resolve_maybe_awaitable(value: Any) -> Any:
     if inspect.isawaitable(value):
-        return asyncio.run(value)
+        # `asyncio.run` takes a coroutine, not any awaitable — it rejects the rest at runtime. The cast
+        # records that narrower requirement without changing which values reach it.
+        return asyncio.run(cast("Coroutine[Any, Any, Any]", value))
     return value
 
 
@@ -318,9 +320,10 @@ def _catalog_from_json(payload: dict[str, Any]) -> GraphqlCatalog:
     provider_json = _require_object(payload.get("provider"), "catalog.json provider must be an object.")
     build_json = _require_object(payload.get("build"), "catalog.json build must be an object.")
     objects_json = _require_list(payload.get("objects"), "catalog.json objects must be an array.")
-    diagnostics_json = payload.get("diagnostics") or []
-    if not isinstance(diagnostics_json, list):
-        raise GraphqlArtifactLoadError("catalog.json diagnostics must be an array.")
+    diagnostics_json = _require_list(
+        payload.get("diagnostics") or [],
+        "catalog.json diagnostics must be an array.",
+    )
 
     return GraphqlCatalog(
         catalog_version=_require_string(payload.get("catalogVersion"), "catalog.json catalogVersion must be a string."),
@@ -496,19 +499,21 @@ def _parse_json_object(text: str, error_message: str) -> dict[str, Any]:
         raise GraphqlArtifactLoadError(str(error)) from error
     if not isinstance(payload, dict):
         raise GraphqlArtifactLoadError(error_message)
-    return payload
+    return cast("dict[str, Any]", payload)
 
 
 def _require_object(value: Any, error_message: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise GraphqlArtifactLoadError(error_message)
-    return value
+    # These three helpers are the only place a decoded artifact value becomes a typed container, so the
+    # cast lands once here instead of at every read in the readers above.
+    return cast("dict[str, Any]", value)
 
 
 def _require_list(value: Any, error_message: str) -> list[Any]:
     if not isinstance(value, list):
         raise GraphqlArtifactLoadError(error_message)
-    return value
+    return cast("list[Any]", value)
 
 
 def _require_string(value: Any, error_message: str) -> str:
