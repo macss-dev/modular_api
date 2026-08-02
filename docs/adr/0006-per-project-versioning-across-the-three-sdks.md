@@ -98,7 +98,8 @@ partial failure can be re-run.
 
 ## Migration
 
-Not part of this ADR's acceptance. Recorded so the order is not rediscovered:
+Tracked in [issue #32](https://github.com/ccisnedev/modular_api/issues/32). Recorded here so the
+order is not rediscovered:
 
 1. Publish `0.7.0` for all fifteen with the existing machinery. All fifteen manifests already declare
    it, so the tag is coherent; and new publish automation should not make its debut on a release that
