@@ -4,3 +4,7 @@
 .inquiry/
 cleanrooms/
 docs/requisitions/
+
+# Overrides locales de Dart: rutas de la maquina, y un paquete publicado tiene que
+# resolver desde el registro.
+pubspec_overrides.yaml

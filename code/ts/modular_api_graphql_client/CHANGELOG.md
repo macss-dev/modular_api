@@ -2,7 +2,7 @@
 
 ## 0.7.0
 
-- version bump for cross-SDK parity (ADR-0002); no functional changes
+- raise the `@macss/modular-api-rest-client` constraint to `^0.7.0`: `^0.6.0` resolves to `>=0.6.0 <0.7.0`, so this package would have shipped at 0.7.0 requiring a 0.6.x @macss/modular-api-rest-client — a version conflict for anyone using both
 
 ## 0.6.0
 
