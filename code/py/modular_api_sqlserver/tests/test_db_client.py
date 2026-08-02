@@ -4,6 +4,11 @@ from dataclasses import dataclass
 
 import pytest
 
+from collections.abc import Callable
+from typing import TypeVar, cast
+
+_T = TypeVar("_T")
+
 from modular_api_sqlserver import (
     DbClient,
     DbCommand,
@@ -114,6 +119,7 @@ def test_client_delegates_query_calls_and_releases_package_owned_leases() -> Non
     assert provider.acquire_count == 1
     assert provider.release_count == 1
     assert executor.last_session == "db-session"
+    assert executor.last_command is not None
     assert executor.last_command.label == "users.list"
 
 
@@ -302,6 +308,7 @@ def test_repository_helpers_stay_thin_over_the_shared_context() -> None:
 
     assert result.is_success is True
     assert result.value == 9
+    assert executor.last_command is not None
     assert executor.last_command.label == "users.count"
 
 
@@ -457,8 +464,12 @@ class _FakeTransactionRunner:
     def run(
         self,
         context: DbTransactionContext[str],
-        body: callable,
-    ) -> DbResult[object]:
+        # Two fixes in one signature. `callable` is the builtin predicate, not a type — annotating with
+        # it left this fake failing to satisfy `DbTransactionRunner[str]`, which is the whole point of a
+        # fake. And `run` is generic in the body's result: pinning it to `object` still would not have
+        # satisfied the protocol, because a runner is transparent in what the body returns.
+        body: Callable[[DbTransactionContext[str]], DbResult[_T]],
+    ) -> DbResult[_T]:
         result = body(context)
         if result.is_success:
             self.commit_count += 1
@@ -476,7 +487,9 @@ class _UserStatsRepository(DbRepository[str]):
                 label="users.count",
             )
         )
-        return result.map(lambda value: int(value.value))
+        # `scalar()` yields `DbScalar[object]`: Python cannot parameterise a method call the way Dart
+        # and TypeScript can, so a consumer narrows the value it knows its own query returns.
+        return result.map(lambda value: int(cast("int | str", value.value)))
 
 
 # --- 0.6.0: typed parameters and stored-procedure support ---

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
+from typing import Any
+
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
@@ -19,7 +20,7 @@ async def _echo_endpoint(request: Request) -> PlainTextResponse:
     return PlainTextResponse("ok")
 
 
-def _build_app(**cors_options: object) -> TestClient:
+def _build_app(**cors_options: Any) -> TestClient:
     """Build a Starlette app with CORS middleware and a single /echo route."""
     app = Starlette(routes=[Route("/echo", _echo_endpoint)])
     cls = cors_middleware(**cors_options)

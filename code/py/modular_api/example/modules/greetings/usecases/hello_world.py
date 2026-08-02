@@ -42,5 +42,9 @@ class HelloWorld(UseCase[HelloWorldInput, HelloWorldOutput]):
         return None
 
     async def execute(self) -> HelloWorldOutput:
-        self.logger.info(f"Greeting user: {self.input.name}")
+        # The mirror of `logger?.info(...)` in the Dart and TypeScript examples. `logger` is None
+        # when the use case runs without the logging middleware, which is what those two already
+        # guarded and this one did not — it would have raised AttributeError.
+        if self.logger is not None:
+            self.logger.info(f"Greeting user: {self.input.name}")
         return HelloWorldOutput(message=f"Hello, {self.input.name}!")

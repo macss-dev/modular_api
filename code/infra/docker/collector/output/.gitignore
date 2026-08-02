@@ -1,1 +1,9 @@
-spans.jsonl
+# Everything the Collector writes here is generated, so ignore the directory's contents rather than the
+# one filename we happen to produce today: `spans.jsonl` alone let any other exporter output — a rotated
+# file, a second pipeline, a debug dump — show up as untracked noise.
+#
+# The directory itself stays in the repo because compose mounts it. That is what `!.gitignore` is for:
+# without a tracked file inside, git would not create the directory on clone and the mount would arrive
+# as a root-owned empty dir instead.
+*
+!.gitignore

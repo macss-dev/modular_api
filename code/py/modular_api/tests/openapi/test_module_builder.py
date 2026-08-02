@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from abc import ABC
+from collections.abc import Iterator
 
 import pytest
 
 from modular_api.core.module_builder import ModuleBuilder
-from modular_api.core.registry import ApiRegistry, api_registry
+from modular_api.core.registry import api_registry
 from modular_api.core.usecase import Input, Output, UseCase
 
 
@@ -56,7 +56,7 @@ class _StubUseCase(UseCase[_StubInput, _StubOutput]):
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry():
+def _clean_registry() -> Iterator[None]:
     """Ensure global registry is empty before and after each test."""
     api_registry.clear()
     yield
@@ -136,6 +136,7 @@ class TestModuleBuilderDocMetadata:
 
         doc = api_registry.routes[0].doc
         assert doc is not None
+        assert doc.summary is not None
         assert "create" in doc.summary
         assert "users" in doc.summary
         assert doc.tags == ["users"]

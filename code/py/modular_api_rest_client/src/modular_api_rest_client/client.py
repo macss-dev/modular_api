@@ -38,7 +38,7 @@ class ServiceClientConfig:
     service_id: str
     base_url: str
     redacted_summary: str
-    default_headers: Mapping[str, str] = field(default_factory=dict)
+    default_headers: Mapping[str, str] = field(default_factory=dict[str, str])
     auth_provider: ServiceAuthProvider | None = None
     timeout: float | None = None
     retry_policy: ServiceRetryPolicy | None = None
@@ -50,7 +50,7 @@ class ServiceClientConfig:
 class ServiceOperation:
     transport_id: str
     operation_id: str
-    headers: Mapping[str, str] = field(default_factory=dict)
+    headers: Mapping[str, str] = field(default_factory=dict[str, str])
     method: str | None = None
     path: str | None = None
     query: Mapping[str, object] | None = None
@@ -187,7 +187,7 @@ class HttpServiceClient:
         decoder: ServiceDecoder[T] | None = None,
     ) -> ServiceResult[ServiceResponse[T]]:
         if self._closed:
-            return ServiceResult.from_failure(
+            return ServiceResult[ServiceResponse[T]].from_failure(
                 ServiceFailure(
                     category=ServiceFailureCategory.UNEXPECTED,
                     code="client_closed",
@@ -198,7 +198,7 @@ class HttpServiceClient:
             )
 
         if operation.transport_id != "http" or operation.method is None or operation.path is None:
-            return ServiceResult.from_failure(
+            return ServiceResult[ServiceResponse[T]].from_failure(
                 ServiceFailure(
                     category=ServiceFailureCategory.PROTOCOL,
                     code="invalid_operation",
@@ -246,9 +246,9 @@ class HttpServiceClient:
 
                 decoded = _decode_body(response_text, response.headers.get_content_type(), decoder)
                 if isinstance(decoded, ServiceFailure):
-                    result = ServiceResult.from_failure(decoded)
+                    result = ServiceResult[ServiceResponse[T]].from_failure(decoded)
                 else:
-                    result = ServiceResult.success(
+                    result = ServiceResult[ServiceResponse[T]].success(
                         ServiceResponse(
                             data=decoded,
                             metadata=ServiceResponseMetadata(
@@ -264,7 +264,7 @@ class HttpServiceClient:
             if tracing is not None:
                 tracing.complete(status_code=error.code)
             details = error.read().decode("utf-8")
-            result = ServiceResult.from_failure(
+            result = ServiceResult[ServiceResponse[T]].from_failure(
                 ServiceFailure(
                     category=_category_for_status(error.code),
                     code=_code_for_status(error.code),
@@ -282,7 +282,7 @@ class HttpServiceClient:
                 tracing.complete(error=error)
             reason = error.reason
             if isinstance(reason, (TimeoutError, socket.timeout)):
-                result = ServiceResult.from_failure(
+                result = ServiceResult[ServiceResponse[T]].from_failure(
                     ServiceFailure(
                         category=ServiceFailureCategory.TIMEOUT,
                         code="timeout",
@@ -293,7 +293,7 @@ class HttpServiceClient:
                     )
                 )
             else:
-                result = ServiceResult.from_failure(
+                result = ServiceResult[ServiceResponse[T]].from_failure(
                     ServiceFailure(
                         category=ServiceFailureCategory.TRANSPORT,
                         code="transport_error",
@@ -308,7 +308,7 @@ class HttpServiceClient:
             # that matters most for the socia burst, and unambiguously an error.
             if tracing is not None:
                 tracing.complete(error=error)
-            result = ServiceResult.from_failure(
+            result = ServiceResult[ServiceResponse[T]].from_failure(
                 ServiceFailure(
                     category=ServiceFailureCategory.TIMEOUT,
                     code="timeout",
@@ -323,7 +323,7 @@ class HttpServiceClient:
             # that matters most for the socia burst, and unambiguously an error.
             if tracing is not None:
                 tracing.complete(error=error)
-            result = ServiceResult.from_failure(
+            result = ServiceResult[ServiceResponse[T]].from_failure(
                 ServiceFailure(
                     category=ServiceFailureCategory.UNEXPECTED,
                     code="unexpected_error",
@@ -340,7 +340,7 @@ class HttpServiceClient:
 
     def close(self) -> ServiceResult[None]:
         self._closed = True
-        return ServiceResult.success(None)
+        return ServiceResult[None].success(None)
 
     def _build_headers(self, operation: ServiceOperation) -> dict[str, str]:
         headers = {

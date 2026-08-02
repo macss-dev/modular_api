@@ -10,7 +10,12 @@ from modular_api_postgres import (
     DbRowSet,
     DbScalar,
     DbSessionLease,
+    DbTransactionContext,
 )
+from collections.abc import Callable
+from typing import TypeVar
+
+_T = TypeVar("_T")
 
 
 def main() -> None:
@@ -87,7 +92,9 @@ class _FakeCommandExecutor:
             )
         )
 
-    def scalar(self, session: str, command: DbCommand) -> DbResult[DbScalar[int]]:
+    # `DbScalar[object]`, matching `DbCommandExecutor`: the protocol cannot promise a narrower value
+    # type, and `DbScalar[int]` is not a `DbScalar[object]` — these containers are invariant.
+    def scalar(self, session: str, command: DbCommand) -> DbResult[DbScalar[object]]:
         del session
         return DbResult.success(
             DbScalar(
@@ -98,7 +105,13 @@ class _FakeCommandExecutor:
 
 
 class _PassthroughTransactionRunner:
-    def run(self, context, body):
+    # Generic in the body's result, like `DbTransactionRunner.run`: a runner does not decide what the
+    # body returns, it only decides whether to commit.
+    def run(
+        self,
+        context: DbTransactionContext[str],
+        body: Callable[[DbTransactionContext[str]], DbResult[_T]],
+    ) -> DbResult[_T]:
         return body(context)
 
 

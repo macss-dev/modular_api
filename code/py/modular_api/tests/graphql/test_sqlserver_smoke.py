@@ -8,9 +8,14 @@ the container is not running.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
-pyodbc = pytest.importorskip("pyodbc")
+if TYPE_CHECKING:
+    import pyodbc
+else:
+    pyodbc = pytest.importorskip("pyodbc")
 
 
 def test_reads_shared_fixture_objects_and_relation_metadata(sqlserver_connection: pyodbc.Connection) -> None:

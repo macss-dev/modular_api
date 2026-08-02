@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 
 from starlette.testclient import TestClient
 from starlette.applications import Starlette

@@ -6,9 +6,22 @@ and composes a top-level example from per-field values.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from pydantic import Field
 
 from modular_api.core.usecase import Input, Output
+
+
+# `to_schema()` returns `dict[str, object]` — a generated JSON Schema is arbitrary nested JSON, and the
+# public signature says so rather than promising a shape it cannot check. These two readers are where
+# this test states the shape it expects, once, instead of at every assertion.
+def _properties(schema: dict[str, object]) -> dict[str, Any]:
+    return cast("dict[str, Any]", schema["properties"])
+
+
+def _required(schema: dict[str, object]) -> list[str]:
+    return cast("list[str]", schema.get("required", []))
 
 
 # ── DTOs with example values ──────────────────────────────────
@@ -42,27 +55,27 @@ class TestFieldExampleMetadata:
 
     def test_string_field_example(self) -> None:
         schema = ExampleInput.to_schema()
-        props = schema["properties"]
+        props = _properties(schema)
         assert props["name"]["example"] == "Alice"
 
     def test_integer_field_example(self) -> None:
         schema = ExampleInput.to_schema()
-        props = schema["properties"]
+        props = _properties(schema)
         assert props["age"]["example"] == 30
 
     def test_number_field_example(self) -> None:
         schema = ExampleInput.to_schema()
-        props = schema["properties"]
+        props = _properties(schema)
         assert props["score"]["example"] == 9.5
 
     def test_boolean_field_example(self) -> None:
         schema = ExampleInput.to_schema()
-        props = schema["properties"]
+        props = _properties(schema)
         assert props["active"]["example"] is True
 
     def test_array_field_example(self) -> None:
         schema = ExampleInput.to_schema()
-        props = schema["properties"]
+        props = _properties(schema)
         assert props["tags"]["example"] == ["dart", "ts"]
 
 
@@ -85,6 +98,6 @@ class TestTopLevelExample:
 
     def test_no_example_omits_key(self) -> None:
         schema = NoExampleInput.to_schema()
-        props = schema["properties"]
+        props = _properties(schema)
         assert "example" not in props["name"]
         assert "example" not in schema

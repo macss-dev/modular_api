@@ -260,6 +260,27 @@ async def test_hello_world():
     assert output.message == "Hello, World!"
 ```
 
+### Type checking is a separate step from `pytest`
+
+`python -m pytest` does not typecheck, in the same way `vitest run` does not and `dart test` does not
+run the analyzer. Every Python package configures pyright in strict mode — with the "annotate every
+expression" family relaxed under `tests/` and `example/` — but a configuration nothing runs is not a
+check:
+
+```powershell
+pwsh .\code\py\typecheck.ps1                               # all five packages
+pwsh .\code\py\typecheck.ps1 -Package modular_api_postgres  # just one
+```
+
+It exits non-zero if any package reports an error, so it can gate a commit, a pre-push hook or a CI
+step. The TypeScript packages chain the equivalent into `npm test` (`tsc --noEmit && vitest run`);
+Dart's is `dart analyze`.
+
+**Run it, not only the suite.** Some expectations can only fail statically. A test may use
+`typing.assert_type`, which does nothing at runtime and is an error at check time when the declared
+type differs — `tests/test_dto_typing.py` pins `Input.from_json` returning the subclass that way.
+Reverting that annotation leaves `pytest` entirely green and turns this script red.
+
 ## Summary
 
 | Test type | When to use | How |
