@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -15,7 +16,10 @@ type SqlModuleLike = {
   connect(config: object): Promise<SqlConnectionPoolLike>;
 };
 
-const require = createRequire(import.meta.url);
+// Resolved from the working directory rather than `import.meta.url`: this package compiles with
+// `module: commonjs`, where `import.meta` is a hard compile error (TS1343). vitest never typechecks,
+// so nothing surfaced it until `tsc --noEmit` became part of `npm test`.
+const require = createRequire(join(process.cwd(), 'package.json'));
 const hasSqlDriver = (() => {
   try {
     require.resolve('mssql');
