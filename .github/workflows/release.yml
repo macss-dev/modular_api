@@ -547,6 +547,16 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         run: python -m pip install --upgrade build twine
 
+      - name: Install package under test
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pip install -e ".[dev]"
+
+      # The core was published without running its suite — the only one of the fifteen with no test
+      # gate, and the package the other four depend on.
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pytest
+
       - name: Build package
         if: steps.check.outputs.skip != 'true'
         run: python -m build
@@ -598,7 +608,17 @@ jobs:
 
       - name: Install build tooling
         if: steps.check.outputs.skip != 'true'
-        run: python -m pip install --upgrade build twine pytest
+        run: python -m pip install --upgrade build twine
+
+      # The package and its declared dependencies, not only the build tooling. pytest imports through
+      # `pythonpath = ["src"]`, so tests used to run against a package whose dependencies were never
+      # installed — which held only while these packages had none. 0.7.0 gave two of them their first
+      # runtime dependency (`opentelemetry-api`) and both jobs failed after 13 packages had already
+      # published irreversibly. The `dev` extra is the declaration of what testing needs; using it means
+      # this workflow does not restate it.
+      - name: Install package under test
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pip install -e ".[dev]"
 
       - name: Run tests
         if: steps.check.outputs.skip != 'true'
@@ -655,7 +675,17 @@ jobs:
 
       - name: Install build tooling
         if: steps.check.outputs.skip != 'true'
-        run: python -m pip install --upgrade build twine pytest
+        run: python -m pip install --upgrade build twine
+
+      # The package and its declared dependencies, not only the build tooling. pytest imports through
+      # `pythonpath = ["src"]`, so tests used to run against a package whose dependencies were never
+      # installed — which held only while these packages had none. 0.7.0 gave two of them their first
+      # runtime dependency (`opentelemetry-api`) and both jobs failed after 13 packages had already
+      # published irreversibly. The `dev` extra is the declaration of what testing needs; using it means
+      # this workflow does not restate it.
+      - name: Install package under test
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pip install -e ".[dev]"
 
       - name: Run tests
         if: steps.check.outputs.skip != 'true'
@@ -712,7 +742,17 @@ jobs:
 
       - name: Install build tooling
         if: steps.check.outputs.skip != 'true'
-        run: python -m pip install --upgrade build twine pytest
+        run: python -m pip install --upgrade build twine
+
+      # The package and its declared dependencies, not only the build tooling. pytest imports through
+      # `pythonpath = ["src"]`, so tests used to run against a package whose dependencies were never
+      # installed — which held only while these packages had none. 0.7.0 gave two of them their first
+      # runtime dependency (`opentelemetry-api`) and both jobs failed after 13 packages had already
+      # published irreversibly. The `dev` extra is the declaration of what testing needs; using it means
+      # this workflow does not restate it.
+      - name: Install package under test
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pip install -e ".[dev]"
 
       - name: Run tests
         if: steps.check.outputs.skip != 'true'
@@ -769,7 +809,17 @@ jobs:
 
       - name: Install build tooling
         if: steps.check.outputs.skip != 'true'
-        run: python -m pip install --upgrade build twine pytest
+        run: python -m pip install --upgrade build twine
+
+      # The package and its declared dependencies, not only the build tooling. pytest imports through
+      # `pythonpath = ["src"]`, so tests used to run against a package whose dependencies were never
+      # installed — which held only while these packages had none. 0.7.0 gave two of them their first
+      # runtime dependency (`opentelemetry-api`) and both jobs failed after 13 packages had already
+      # published irreversibly. The `dev` extra is the declaration of what testing needs; using it means
+      # this workflow does not restate it.
+      - name: Install package under test
+        if: steps.check.outputs.skip != 'true'
+        run: python -m pip install -e ".[dev]"
 
       - name: Run tests
         if: steps.check.outputs.skip != 'true'
