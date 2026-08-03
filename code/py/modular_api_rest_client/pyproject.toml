@@ -30,6 +30,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    # `tests/test_tracing.py` imports `opentelemetry.sdk.trace`: the API alone is no-op, so asserting
+    # that spans are emitted needs an SDK. A test dependency, not a runtime one — the published package
+    # still declares only the API (ADR-0005 A1/A2). `modular_api_postgres` already declared this; this
+    # package did not, which is why its publish job failed with `No module named 'opentelemetry.sdk'`
+    # once the workflow started installing what each package declares.
+    "opentelemetry-sdk>=1.44,<2",
     # Configured below at `typeCheckingMode = "strict"`. Declared here because a checker the
     # repo configures and never installs is a checker that has never run.
     "pyright>=1.1.400",
