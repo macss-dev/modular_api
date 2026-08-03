@@ -1,6 +1,6 @@
 name: modular_api_rest_client
 description: Official MACSS outbound REST client for Dart.
-version: 0.6.0
+version: 0.7.0
 
 repository: https://github.com/ccisnedev/modular_api/tree/main/code/dart/modular_api_rest_client
 homepage: https://github.com/ccisnedev/modular_api
@@ -10,8 +10,17 @@ environment:
   sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
+  # OpenTelemetry API only — never the SDK, an exporter, grpc or protobuf. Declared
+  # directly rather than inherited, because this package does not depend on
+  # modular_api (runbook D21). The API is no-op without an SDK, so a consumer who
+  # never enables tracing pays a resolution entry and nothing else.
+  dartastic_opentelemetry_api: ^0.9.1
   http: ">=1.2.0 <2.0.0"
 
 dev_dependencies:
+  # Test-only: with just the API installed spans are no-ops that record nothing, so a real
+  # TracerProvider is the only way instrumentation is observable (runbook D22). Must never
+  # move to `dependencies`.
+  dartastic_opentelemetry: ^0.9.7
   lints: ^5.0.0
   test: ^1.28.0

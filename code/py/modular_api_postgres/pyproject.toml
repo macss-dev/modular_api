@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "macss-modular-api-postgres"
-version = "0.6.0"
+version = "0.7.0"
 description = "Official MACSS Postgres integration package for Python."
 readme = "README.md"
 license = "MIT"
@@ -21,10 +21,20 @@ classifiers = [
     "Topic :: Database",
     "Typing :: Typed",
 ]
-dependencies = []
+# OpenTelemetry API only — never the SDK, an exporter, grpcio or protobuf. Declared
+# directly rather than inherited, because this package does not depend on
+# macss-modular-api (runbook D21). The API is no-op without an SDK, so a consumer who
+# never enables tracing pays a resolution entry and nothing else.
+#
+# This is the first runtime dependency the package has ever had. ADR-0004 keeps it free
+# of any *database driver*, which is untouched: an instrumentation API is not a driver,
+# and a new test asserts no driver is present.
+dependencies = ["opentelemetry-api>=1.44,<2"]
 
 [project.optional-dependencies]
 dev = [
+    # The SDK is what makes spans observable at all — the API alone is no-op (runbook D22).
+    "opentelemetry-sdk>=1.44,<2",
     # Configured below at `typeCheckingMode = "strict"`. Declared here because a checker the
     # repo configures and never installs is a checker that has never run.
     "pyright>=1.1.400",
@@ -63,6 +73,15 @@ reportUnknownParameterType = false
 reportUnknownLambdaType = false
 reportMissingParameterType = false
 reportMissingTypeArgument = false
+# A pytest fixture is called by name through collection, never by a reference the checker can see, so
+# `reportUnusedFunction` reports every `autouse` fixture in this tree. That is the tool not modelling
+# pytest, not dead code. `reportUnusedImport` and `reportUnusedVariable` stay on — those do find dead
+# code, and they did.
+reportUnusedFunction = false
+reportUnusedClass = false
+# Tests legitimately reach into internals to exercise them directly. In `src/` this rule found real
+# coupling and it was fixed rather than silenced.
+reportPrivateUsage = false
 # `example/` is documentation a consumer copies, not a published typed surface — same relaxed family
 # as `tests/`, and the same expectation that nothing which can indicate a real defect is silenced.
 [[tool.pyright.executionEnvironments]]

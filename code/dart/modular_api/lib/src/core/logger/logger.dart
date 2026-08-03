@@ -12,16 +12,54 @@ export 'modular_logger.dart' show LogLevel, ModularLogger;
 ///
 /// Accepts an optional [sink] for output — defaults to `stdout`.
 /// In tests, pass a `StringBuffer` to capture output without side-effects.
+/// Builds platform-specific correlation fields from the ids the framework resolved.
+///
+/// The framework emits open formats and nothing vendor-specific (roadmap invariant 7),
+/// so a field like Google's `logging.googleapis.com/trace` — which needs a project id
+/// the framework has no business knowing — is produced by the application:
+///
+/// ```dart
+/// traceFieldFormatter: (traceId, spanId) => {
+///   'logging.googleapis.com/trace': 'projects/my-project/traces/$traceId',
+///   if (spanId != null) 'logging.googleapis.com/spanId': spanId,
+/// }
+/// ```
+typedef TraceFieldFormatter = Map<String, Object> Function(
+  String traceId,
+  String? spanId,
+);
+
 class RequestScopedLogger implements ModularLogger {
   final String traceId;
   final LogLevel logLevel;
   final String serviceName;
   final StringSink _sink;
 
+  /// The caller's `X-Request-ID`, when it sent one.
+  ///
+  /// Preserved beside [traceId] rather than promoted into it (runbook D6), so anyone
+  /// correlating by the token they sent keeps working.
+  final String? requestId;
+
+  /// Builds platform correlation fields. `null` means none are emitted.
+  final TraceFieldFormatter? traceFieldFormatter;
+
+  /// The active server span's id, when tracing is configured.
+  ///
+  /// Known at construction because the tracing middleware is **outermost** (runbook
+  /// D12 as reversed): the span already exists when `loggingMiddleware` creates this
+  /// logger, so nothing needs mutating afterwards. An earlier design had logging
+  /// outside tracing and had to attach this later, which is the scaffolding that
+  /// reversal removed.
+  final String? spanId;
+
   RequestScopedLogger({
     required this.traceId,
     required this.logLevel,
     required this.serviceName,
+    this.spanId,
+    this.requestId,
+    this.traceFieldFormatter,
     StringSink? sink,
   }) : _sink = sink ?? defaultLogSink();
 
@@ -122,7 +160,16 @@ class RequestScopedLogger implements ModularLogger {
       'msg': msg,
       'service': serviceName,
       'trace_id': traceId,
+      if (spanId != null) 'span_id': spanId,
+      if (requestId != null) 'request_id': requestId,
     };
+
+    // Only when there is trace context to point at. A platform field naming a trace
+    // that does not exist is worse than no field.
+    final formatter = traceFieldFormatter;
+    if (formatter != null && spanId != null) {
+      entry.addAll(formatter(traceId, spanId));
+    }
 
     if (extra != null) entry.addAll(extra);
     if (fields != null) entry['fields'] = fields;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0
+
+- raise the `modular_api` constraint to `^0.7.0`: `^0.6.0` resolves to `>=0.6.0 <0.7.0`, so this package would have shipped at 0.7.0 requiring a 0.6.x modular_api — a version conflict for anyone using both
+
 ## 0.6.0
 
 - add typed command parameters via `DbParameter` (name, value, direction input/output/inputOutput, free-form `typeHint`) with `input`/`output`/`inputOutput` helpers

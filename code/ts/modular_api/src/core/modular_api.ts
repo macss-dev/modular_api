@@ -10,6 +10,11 @@ import type { HealthCheck } from './health/health_check';
 import { HealthService } from './health/health_service';
 import { MetricRegistry, MetricsRegistrar } from './metrics/metric_registry';
 import { loggingMiddleware } from './logger/logging_middleware';
+import { propagation, type TextMapPropagator } from '@opentelemetry/api';
+
+import { CompositeTextMapPropagator } from './tracing/compositePropagator';
+import { tracingMiddleware } from './tracing/tracingMiddleware';
+import { TracingOptions } from './tracing/tracingOptions';
 import { LogLevel } from './logger/logger';
 import { bodyParserErrorHandler } from './body_parser_error_handler';
 import { unhandledRequestErrorHandler } from './unhandled_request_error_handler';
@@ -41,6 +46,13 @@ export interface ModularApiOptions {
    * Default: LogLevel.info (emits emergency..info, suppresses debug).
    */
   logLevel?: LogLevel;
+
+  /**
+   * Opt-in distributed tracing. Absent means off and costs nothing: no tracing
+   * middleware is installed and no span is ever created. The application supplies
+   * the tracer provider; the framework depends on `@opentelemetry/api` only.
+   */
+  tracing?: TracingOptions;
   /**
    * OpenAPI `servers` list. Each entry has a `url` and optional `description`.
    * When omitted, `serve()` generates `[{url: 'http://localhost:{port}'}]`.
@@ -94,6 +106,9 @@ export class ModularApi {
   // Logging
   private readonly logLevel: LogLevel;
 
+  /** Distributed tracing options, or undefined when tracing is off (ADR-0005). */
+  private readonly tracing?: TracingOptions;
+
   // OpenAPI
   private readonly servers?: Array<{ url: string; description?: string }>;
   private readonly graphql?: GraphqlOptions;
@@ -120,6 +135,7 @@ export class ModularApi {
 
     // Logging
     this.logLevel = options.logLevel ?? LogLevel.info;
+    this.tracing = options.tracing;
 
     // OpenAPI servers
     this.servers = options.servers;
@@ -294,11 +310,50 @@ export class ModularApi {
         operationalPaths.openApiYamlPath,
         ...(operationalPaths.metricsPath ? [operationalPaths.metricsPath] : []),
       ];
+      // Tracing is the OUTERMOST middleware, with logging inside it (runbook D12 as
+      // reversed). The logger then runs within the span's active scope and reads
+      // `trace_id` and `span_id` from the ambient span on every line. An earlier design
+      // had this after logging, which forced the logger to own the trace id and the span
+      // to adopt it — and here that meant seeding a parent, whose trace flags made the
+      // default ParentBased sampler drop the span entirely.
+      //
+      // Absent options install nothing, which is what makes tracing free when it is off
+      // (gate G3).
+      const tracing = this.tracing;
+      if (tracing !== undefined) {
+        // Publish the chain as the global propagator, which is how satellite packages
+        // inject it. @macss/modular-api-rest-client does not depend on this package (D21),
+        // so it cannot reach our W3C propagator — and per the OpenTelemetry API's guidance
+        // it should not: instrumentation libraries read the global, the host sets it.
+        //
+        // That indirection also means whatever chain the application configured is honoured
+        // on outbound calls, including a Cloud Trace propagator it appended.
+        const propagators = tracing.policy.propagators;
+        if (propagators.length > 0) {
+          propagation.setGlobalPropagator(
+            propagators.length === 1
+              ? (propagators[0] as TextMapPropagator)
+              : new CompositeTextMapPropagator(propagators),
+          );
+        }
+
+        this.app.use(
+          tracingMiddleware({
+            tracer: tracing.tracer,
+            policy: tracing.policy,
+            excludedRoutes: excludedLogRoutes,
+          }),
+        );
+      }
+
       this.app.use(
         loggingMiddleware({
           logLevel: this.logLevel,
           serviceName: this.title,
           excludedRoutes: excludedLogRoutes,
+          ...(this.tracing?.traceFieldFormatter === undefined
+            ? {}
+            : { traceFieldFormatter: this.tracing.traceFieldFormatter }),
         }),
       );
 
@@ -336,7 +391,24 @@ export class ModularApi {
       });
 
       server.on('close', () => {
-        void pluginHost.shutdown();
+        // Tracing's shutdown callback runs alongside the plugin host's, not as a plugin.
+        // There is deliberately no tracing plugin: every responsibility ADR-0005 decision
+        // 4 gave one was reassigned by a later decision, and what remained was a plugin
+        // whose setup() did nothing (see ADR-0005 A7).
+        //
+        // The framework owns the timing; the application owns the provider. A callback
+        // that rejects is swallowed — losing telemetry is bad, failing to stop is worse.
+        const onShutdown = this.tracing?.onShutdown;
+        void (async () => {
+          if (onShutdown !== undefined) {
+            try {
+              await onShutdown();
+            } catch {
+              // Intentionally ignored.
+            }
+          }
+          await pluginHost.shutdown();
+        })();
       });
     });
   }

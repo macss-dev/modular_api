@@ -10,6 +10,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Generic, Mapping, TypeVar, cast
 
+from modular_api_rest_client.client_tracing import (
+    REQUEST_ID_HEADER,
+    ClientCallTracing,
+)
+
 T = TypeVar("T")
 _MISSING = object()
 
@@ -208,10 +213,24 @@ class HttpServiceClient:
         started_at = time.monotonic()
         result: ServiceResult[ServiceResponse[T]]
 
+        tracing: ClientCallTracing | None = None
         try:
             headers = self._build_headers(operation)
+            url = _resolve_url(self._config.base_url, operation.path, operation.query)
+
+            # Client span plus trace-context and request-id injection. Zero configuration:
+            # the parent is the ambient server span carried by contextvars, and the tracer is
+            # the global provider — both no-ops when no OpenTelemetry SDK is configured.
+            tracing = ClientCallTracing.start(
+                method=operation.method,
+                operation_id=operation.operation_id,
+                url=url,
+                headers=headers,
+                inbound_request_id=headers.get(REQUEST_ID_HEADER),
+            )
+
             request = urllib.request.Request(
-                _resolve_url(self._config.base_url, operation.path, operation.query),
+                url,
                 data=_encode_body(operation.body, headers),
                 headers=headers,
                 method=operation.method,
@@ -219,6 +238,9 @@ class HttpServiceClient:
 
             with self._opener.open(request, timeout=self._config.timeout) as response:
                 status_code = getattr(response, "status", response.getcode())
+                # Closed as soon as the response is in hand, so the span measures the call
+                # rather than the decoding that follows it.
+                tracing.complete(status_code=status_code)
                 response_text = response.read().decode("utf-8")
                 header_map = _headers_to_record(response.headers)
 
@@ -239,6 +261,8 @@ class HttpServiceClient:
                         )
                     )
         except urllib.error.HTTPError as error:
+            if tracing is not None:
+                tracing.complete(status_code=error.code)
             details = error.read().decode("utf-8")
             result = ServiceResult[ServiceResponse[T]].from_failure(
                 ServiceFailure(
@@ -252,6 +276,10 @@ class HttpServiceClient:
                 )
             )
         except urllib.error.URLError as error:
+            # No response at all: a timeout, a refused connection, a DNS failure. The case
+            # that matters most for the socia burst, and unambiguously an error.
+            if tracing is not None:
+                tracing.complete(error=error)
             reason = error.reason
             if isinstance(reason, (TimeoutError, socket.timeout)):
                 result = ServiceResult[ServiceResponse[T]].from_failure(
@@ -276,6 +304,10 @@ class HttpServiceClient:
                     )
                 )
         except (TimeoutError, socket.timeout) as error:
+            # No response at all: a timeout, a refused connection, a DNS failure. The case
+            # that matters most for the socia burst, and unambiguously an error.
+            if tracing is not None:
+                tracing.complete(error=error)
             result = ServiceResult[ServiceResponse[T]].from_failure(
                 ServiceFailure(
                     category=ServiceFailureCategory.TIMEOUT,
@@ -287,6 +319,10 @@ class HttpServiceClient:
                 )
             )
         except Exception as error:  # noqa: BLE001
+            # No response at all: a timeout, a refused connection, a DNS failure. The case
+            # that matters most for the socia burst, and unambiguously an error.
+            if tracing is not None:
+                tracing.complete(error=error)
             result = ServiceResult[ServiceResponse[T]].from_failure(
                 ServiceFailure(
                     category=ServiceFailureCategory.UNEXPECTED,

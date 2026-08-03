@@ -39,7 +39,22 @@ export 'src/core/usecase/use_case_exception.dart' show UseCaseException;
 export 'src/core/schema/field.dart'
     show SchemaField, buildSchema, InputValidationException, validateJsonFields;
 // Logger
-export 'src/core/logger/logger.dart' show LogLevel, ModularLogger;
+export 'src/core/logger/logger.dart'
+    show LogLevel, ModularLogger, TraceFieldFormatter;
+
+/// Distributed tracing (ADR-0005). The framework depends on the OpenTelemetry
+/// **API**; the application supplies the SDK and its tracer provider.
+export 'src/core/tracing/tracing_options.dart' show TracingOptions;
+export 'src/core/tracing/propagation_policy.dart'
+    show PropagationPolicy, PropagationResult, requestIdHeader;
+export 'src/core/tracing/w3c_trace_context_propagator.dart'
+    show W3CTraceContextPropagator, traceparentHeader, tracestateHeader;
+export 'src/core/tracing/tracing_middleware.dart'
+    show tracingSpanContextKey, propagationResultContextKey;
+// Transport-neutral span construction (gate G4). `tracingMiddleware` is a shelf adapter over
+// these; the planned gRPC transport is a second adapter, not a second implementation.
+export 'src/core/tracing/server_span.dart'
+    show ServerSpanStart, startServerSpan, completeServerSpan;
 
 // Health
 export 'src/core/health/health_check.dart'

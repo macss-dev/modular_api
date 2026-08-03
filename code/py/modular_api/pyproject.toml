@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "macss-modular-api"
-version = "0.6.1"
+version = "0.7.0"
 description = "Use-case-centric toolkit for building modular APIs with Starlette. Define UseCase classes (input → validate → execute → output), connect them to HTTP routes, and expose OpenAPI documentation automatically."
 readme = "README.md"
 license = "MIT"
@@ -26,6 +26,11 @@ classifiers = [
 dependencies = [
     "starlette>=0.40",
     "pydantic>=2.0",
+    # OpenTelemetry API only — never the SDK, an exporter, grpcio or protobuf.
+    # The API is no-op without an SDK, so tracing costs nothing until the
+    # application configures a TracerProvider. See ADR-0005 (amended) A1/A2, and
+    # tests/tracing/test_dependency_boundary.py, which enforces this.
+    "opentelemetry-api>=1.44,<2",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +42,9 @@ dev = [
     "pyright>=1.1.400",
     "json5>=0.9.14",
     "graphql-core>=3.2,<3.3",
+    # The SDK is what makes spans observable at all — the API alone is no-op (runbook D22).
+    # Declared here and never in `dependencies`, which the boundary test enforces.
+    "opentelemetry-sdk>=1.44,<2",
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "httpx>=0.27",

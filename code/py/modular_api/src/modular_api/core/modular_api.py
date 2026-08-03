@@ -22,6 +22,7 @@ Usage::
 
 from __future__ import annotations
 
+import inspect
 from contextlib import asynccontextmanager
 from typing import Any, Callable
 
@@ -33,10 +34,19 @@ from modular_api.core.error_response_middleware import error_response_middleware
 from modular_api.core.health.health_service import HealthService
 from modular_api.core.logger.logger import LogLevel
 from modular_api.core.logger.logging_middleware import logging_middleware
+from opentelemetry.propagate import set_global_textmap
+from opentelemetry.propagators.composite import CompositePropagator
+
+from modular_api.core.tracing.tracing_middleware import tracing_middleware
+from modular_api.core.tracing.tracing_options import TracingOptions
 from modular_api.core.metrics.metric import Counter, Gauge, Histogram
 from modular_api.core.metrics.metric_registry import MetricRegistry, MetricsRegistrar
 from modular_api.core.module_builder import ModuleBuilder
-from modular_api.core.official_plugins import build_runtime_plugins, operational_route_paths
+from modular_api.core.official_plugins import (
+    OperationalRoutePaths,
+    build_runtime_plugins,
+    operational_route_paths,
+)
 from modular_api.core.plugin import (
     Plugin,
     PluginHostError,
@@ -67,6 +77,7 @@ class ModularApi:
         metrics_path: str = "/metrics",
         log_level: LogLevel = LogLevel.info,
         graphql: GraphqlOptions | None = None,
+        tracing: TracingOptions | None = None,
     ) -> None:
         self._base_path = base_path
         self._title = title
@@ -77,6 +88,8 @@ class ModularApi:
         self._metrics_path = metrics_path
         self._log_level = log_level
         self._graphql = graphql
+        # Distributed tracing options, or None when tracing is off (ADR-0005).
+        self._tracing = tracing
 
         self._health_service = HealthService(version=version, release_id=self._release_id)
         self._module_routers: list[tuple[str, Router]] = []
@@ -218,6 +231,21 @@ class ModularApi:
             try:
                 yield
             finally:
+                # Tracing's shutdown callback runs alongside the plugin host's, not as a
+                # plugin. There is deliberately no tracing plugin: every responsibility
+                # ADR-0005 decision 4 gave one was reassigned by a later decision, and what
+                # remained was a plugin whose setup() did nothing (see ADR-0005 A7).
+                #
+                # The framework owns the timing; the application owns the provider. A
+                # callback that raises is swallowed — losing telemetry is bad, failing to
+                # stop is worse.
+                if self._tracing is not None and self._tracing.on_shutdown is not None:
+                    try:
+                        result = self._tracing.on_shutdown()
+                        if inspect.isawaitable(result):
+                            await result
+                    except Exception:  # noqa: BLE001 - see comment above
+                        pass
                 await plugin_host.shutdown()
 
         app = Starlette(routes=routes, lifespan=lifespan)
@@ -242,7 +270,7 @@ class ModularApi:
         # 4b. Error normalization middleware (wraps plugin middleware + routes)
         app.add_middleware(error_response_middleware())
 
-        # 5. Logging middleware (outermost — wraps everything)
+        # 5. Logging middleware (inside tracing — see step 6 below)
         excluded_log_routes = [
             operational_paths.health_path,
             operational_paths.docs_path,
@@ -256,8 +284,45 @@ class ModularApi:
                 log_level=self._log_level,
                 service_name=self._title,
                 excluded_routes=excluded_log_routes,
+                trace_field_formatter=(
+                    self._tracing.trace_field_formatter if self._tracing else None
+                ),
             ),
         )
+
+        # 6. Tracing — added LAST, so Starlette's LIFO ordering makes it the OUTERMOST
+        # middleware with logging inside it (runbook D12 as reversed). The logger then
+        # runs within the span's active scope and reads trace_id and span_id from the
+        # ambient span on every line, including `request completed`, because contextvars
+        # keep the span active there.
+        #
+        # An earlier design had tracing inside logging, which forced the logger to own the
+        # trace id and the span to adopt it — expressible in Dart but not in TypeScript
+        # without seeding a parent, where the seeded trace flags made the sampler drop the
+        # span. Absent options add nothing, which is what makes tracing free when it is off
+        # (gate G3).
+        if self._tracing is not None:
+            # Publish the chain as the global propagator, which is how satellite packages
+            # inject it. macss-modular-api-rest-client does not depend on this package
+            # (D21), so it cannot reach our propagator — and per the OpenTelemetry API's
+            # guidance it should not: instrumentation libraries read the global, the host
+            # sets it. That also means whatever chain the application configured is honoured
+            # on outbound calls, including a Cloud Trace propagator it appended.
+            propagators = list(self._tracing.policy.propagators)
+            if propagators:
+                set_global_textmap(
+                    propagators[0]
+                    if len(propagators) == 1
+                    else CompositePropagator(propagators)
+                )
+
+            app.add_middleware(
+                tracing_middleware(
+                    tracer=self._tracing.tracer,
+                    policy=self._tracing.policy,
+                    excluded_routes=_tracing_excluded_routes(operational_paths),
+                ),
+            )
 
         return app
 
@@ -285,3 +350,24 @@ class ModularApi:
         if not path:
             return ""
         return path if path.startswith("/") else f"/{path}"
+
+
+def _tracing_excluded_routes(operational_paths: OperationalRoutePaths) -> tuple[str, ...]:
+    """Operational routes kept out of the trace store.
+
+    Derived from ``operational_paths`` rather than hardcoded, so it cannot drift apart
+    from the logger's own exclusions — health, docs, openapi and metrics are noise in a
+    trace store.
+    """
+    # The parameter was `object` with a `type: ignore` on each read. `OperationalRoutePaths` is what the
+    # caller already builds, so naming it makes all five reads checked instead of suppressed.
+    paths = [
+        operational_paths.health_path,
+        operational_paths.docs_path,
+        operational_paths.openapi_json_path,
+        operational_paths.openapi_yaml_path,
+    ]
+    metrics_path = operational_paths.metrics_path
+    if metrics_path is not None:
+        paths.append(metrics_path)
+    return tuple(paths)

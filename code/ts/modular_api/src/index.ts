@@ -71,6 +71,30 @@ export type { ModularLogger } from './core/logger/logger';
 export { loggingMiddleware, LOGGER_LOCALS_KEY } from './core/logger/logging_middleware';
 export type { LoggingMiddlewareOptions } from './core/logger/logging_middleware';
 
+// Distributed tracing (ADR-0005). The framework depends on @opentelemetry/api; the
+// application supplies the SDK and its tracer provider.
+export { TracingOptions } from './core/tracing/tracingOptions';
+export type { TracingOptionsInit } from './core/tracing/tracingOptions';
+export { PropagationPolicy, REQUEST_ID_HEADER } from './core/tracing/propagationPolicy';
+export type { PropagationResult, PropagationPolicyOptions } from './core/tracing/propagationPolicy';
+export {
+  W3CTraceContextPropagator,
+  TRACEPARENT_HEADER,
+  TRACESTATE_HEADER,
+} from './core/tracing/w3cTraceContextPropagator';
+export {
+  TRACING_SPAN_LOCAL,
+  PROPAGATION_RESULT_LOCAL,
+} from './core/tracing/tracingMiddleware';
+// Transport-neutral span construction (gate G4). `tracingMiddleware` is an Express adapter over
+// these; the planned gRPC transport is a second adapter, not a second implementation.
+export { startServerSpan, completeServerSpan } from './core/tracing/serverSpan';
+export type {
+  ServerSpanStart,
+  StartServerSpanOptions,
+  CompleteServerSpanOptions,
+} from './core/tracing/serverSpan';
+
 // OpenAPI — Raw spec endpoints
 export {
   buildOpenApiSpec,
