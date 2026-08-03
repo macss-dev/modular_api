@@ -4,7 +4,10 @@ import 'package:modular_api/src/core/error_response_middleware.dart';
 import 'package:modular_api/src/graphql/runtime/graphql_runtime_health.dart';
 import 'package:modular_api/src/core/logger/logging_middleware.dart';
 import 'package:modular_api/src/core/metrics/metric_registry.dart';
+import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart'
+    show OTelAPI;
 import 'package:modular_api/src/core/official_plugins.dart';
+import 'package:modular_api/src/core/tracing/tracing_middleware.dart';
 import 'package:modular_api/src/core/usecase/usecase_http_handler.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -27,6 +30,9 @@ class ModularApi {
 
   // ── Logger ──
   final LogLevel logLevel;
+
+  /// Distributed tracing options, or `null` when tracing is off (ADR-0005).
+  final TracingOptions? tracing;
 
   // ── OpenAPI ──
   final List<Map<String, String>>? servers;
@@ -59,6 +65,10 @@ class ModularApi {
   /// [metricsPath] — Path for the metrics endpoint (default `/metrics`).
   /// [excludedMetricsRoutes] — Routes excluded from instrumentation.
   /// [logLevel] — Minimum RFC 5424 severity to emit (default `LogLevel.info`).
+  /// [tracing] — Opt-in distributed tracing. Absent means off and costs nothing:
+  /// no tracing middleware is installed and no span is ever created. The
+  /// application supplies the tracer provider; the framework depends on the
+  /// OpenTelemetry API only. See [TracingOptions].
   ModularApi({
     this.basePath = '/api',
     this.title = 'Modular API',
@@ -70,6 +80,7 @@ class ModularApi {
     this.metricsPath = '/metrics',
     List<String>? excludedMetricsRoutes,
     this.logLevel = LogLevel.info,
+    this.tracing,
   })  : _healthService = HealthService(
           version: version,
           releaseId: releaseId,
@@ -214,6 +225,50 @@ class ModularApi {
     }
 
     var pipeline = const Pipeline();
+    // Tracing is the OUTERMOST middleware, with logging inside it (runbook D12 as
+    // reversed). The logger then runs within the span's active scope and reads
+    // `trace_id` and `span_id` from the ambient span on every line, including
+    // `request completed`. An earlier design had this inside logging, which forced the
+    // logger to own the trace id and the span to adopt it — expressible in Dart but not
+    // in TypeScript without seeding a parent, where the seeded trace flags made the
+    // sampler drop the span.
+    //
+    // Absent options install nothing at all, which is what makes tracing free when it
+    // is off (gate G3).
+    final tracingOptions = tracing;
+    if (tracingOptions != null) {
+      // Publish the chain as the global propagator, which is how satellite packages
+      // inject it. `modular_api_rest_client` does not depend on core (D21), so it cannot
+      // reach our W3C propagator — and per the OpenTelemetry API's own guidance it should
+      // not: instrumentation libraries read the global, and the host or SDK sets it.
+      //
+      // That indirection also means whatever chain the application configured is honoured
+      // on outbound calls, including a Cloud Trace propagator it appended, without any
+      // package needing to know such a thing exists.
+      final propagators = tracingOptions.policy.propagators;
+      if (propagators.isNotEmpty) {
+        OTelAPI.textMapPropagator = propagators.length == 1
+            ? propagators.single
+            : OTelAPI.compositePropagator(propagators);
+      }
+
+      pipeline = pipeline.addMiddleware(
+        tracingMiddleware(
+          tracer: tracingOptions.tracer,
+          policy: tracingOptions.policy,
+          excludedRoutes: [
+            operationalPaths.healthPath,
+            operationalPaths.docsPath,
+            operationalPaths.openApiJsonPath,
+            operationalPaths.openApiYamlPath,
+            if (operationalPaths.metricsPath != null)
+              operationalPaths.metricsPath!,
+          ],
+        ),
+      );
+    }
+
+
 
     // Logging middleware FIRST (outermost) to capture full lifecycle
     // including all subsequent middlewares.
@@ -221,6 +276,7 @@ class ModularApi {
       loggingMiddleware(
         logLevel: logLevel,
         serviceName: title,
+        traceFieldFormatter: tracing?.traceFieldFormatter,
         excludedRoutes: [
           operationalPaths.healthPath,
           operationalPaths.docsPath,
@@ -254,7 +310,25 @@ class ModularApi {
       ip ?? InternetAddress.anyIPv4,
       port,
     );
-    final managedServer = _ManagedHttpServer(server, pluginHost.shutdown);
+    // Tracing's shutdown callback runs alongside the plugin host's, not as a plugin.
+    //
+    // There is deliberately NO tracing plugin. Every responsibility ADR-0005 decision 4
+    // gave one was reassigned by a later decision: A2 moved the sampler, processor and
+    // exporter to the application; decision 4 itself made the span host-owned so no
+    // middleware is registered; and D8 as revised turned provider shutdown into a callback
+    // the application supplies. A plugin whose setup() does nothing and whose only act is
+    // to forward one callback is indirection with no reader benefit.
+    final tracingShutdown = tracing?.onShutdown;
+    final managedServer = _ManagedHttpServer(server, () async {
+      if (tracingShutdown != null) {
+        try {
+          await tracingShutdown();
+        } catch (_) {
+          // Losing telemetry is bad; failing to stop the server is worse.
+        }
+      }
+      await pluginHost.shutdown();
+    });
 
     /// Print info
     stdout.writeln('Docs on http://localhost:${managedServer.port}${operationalPaths.docsPath}');

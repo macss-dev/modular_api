@@ -57,6 +57,14 @@ def _default_write(line: str) -> None:
     sys.stdout.write(line + "\n")
 
 
+#: Builds platform-specific correlation fields from the ids the framework resolved.
+#:
+#: The framework emits open formats and nothing vendor-specific (roadmap invariant 7), so
+#: a field like Google's ``logging.googleapis.com/trace`` — which needs a project id the
+#: framework has no business knowing — is produced by the application.
+TraceFieldFormatter = Callable[[str, str | None], dict[str, object]]
+
+
 class RequestScopedLogger:
     """Per-request logger carrying ``trace_id`` with ``log_level`` filtering.
 
@@ -76,11 +84,22 @@ class RequestScopedLogger:
         # straight through instead of importing the module-private default. This is what the TypeScript
         # constructor already does with an omitted `writeFn` and Dart with an omitted `LogSink`.
         write_fn: WriteFn | None = None,
+        span_id: str | None = None,
+        request_id: str | None = None,
+        trace_field_formatter: TraceFieldFormatter | None = None,
     ) -> None:
         self._trace_id = trace_id
         self._log_level = log_level
         self._service_name = service_name
         self._write_fn: WriteFn = _default_write if write_fn is None else write_fn
+        # Known at construction because the tracing middleware is outermost (runbook D12
+        # as reversed): the span already exists when logging_middleware creates this
+        # logger, so nothing needs mutating afterwards.
+        self._span_id = span_id
+        # The caller's X-Request-ID, preserved beside the trace id rather than promoted
+        # into it (runbook D6).
+        self._request_id = request_id
+        self._trace_field_formatter = trace_field_formatter
 
     @property
     def trace_id(self) -> str:
@@ -166,6 +185,16 @@ class RequestScopedLogger:
             "service": self._service_name,
             "trace_id": self._trace_id,
         }
+
+        if self._span_id is not None:
+            entry["span_id"] = self._span_id
+        if self._request_id is not None:
+            entry["request_id"] = self._request_id
+
+        # Only when there is trace context to point at. A platform field naming a trace
+        # that does not exist is worse than no field.
+        if self._trace_field_formatter is not None and self._span_id is not None:
+            entry.update(self._trace_field_formatter(self._trace_id, self._span_id))
 
         if extra is not None:
             entry.update(extra)

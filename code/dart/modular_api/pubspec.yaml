@@ -1,6 +1,6 @@
 name: modular_api
 description: Use-case centric API toolkit for Dart — Shelf UseCase base class, HTTP adapters, CORS middleware, and automatic OpenAPI documentation.
-version: 0.6.1
+version: 0.7.0
 
 repository: https://github.com/macss-dev/modular_api/tree/main/code/dart/modular_api
 homepage: https://github.com/macss-dev/modular_api
@@ -12,6 +12,11 @@ environment:
   
 dependencies:
   crypto: ^3.0.6
+  # OpenTelemetry API only — never the SDK, an exporter, grpc or protobuf.
+  # The API is no-op without an SDK, so tracing costs nothing until the
+  # application supplies a TracerProvider. See ADR-0005 (amended) A1/A2, and
+  # test/tracing/dependency_boundary_test.dart, which enforces this.
+  dartastic_opentelemetry_api: ^0.9.1
   gql: ^1.0.1
   json5: ^0.8.2
   leto: 0.0.1-dev.2
@@ -21,6 +26,14 @@ dependencies:
   shelf_router: ^1.1.4
 
 dev_dependencies:
+  # The OpenTelemetry SDK is a TEST-ONLY dependency and must never move to
+  # `dependencies`. A2 forbids the framework shipping an SDK to consumers; it does
+  # not forbid testing against one, and there is no alternative: with only the API
+  # installed, spans are no-ops that record nothing, so instrumentation cannot be
+  # observed without a real TracerProvider. See runbook D22, and
+  # test/tracing/dependency_boundary_test.dart, which asserts the boundary this
+  # entry sits on the safe side of.
+  dartastic_opentelemetry: ^0.9.7
   http: ^1.6.0
   lints: ^5.0.0
   test: ^1.28.0

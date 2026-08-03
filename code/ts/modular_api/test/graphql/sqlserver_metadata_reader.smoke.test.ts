@@ -1,6 +1,9 @@
-import { createRequire } from 'node:module';
-import { join } from 'node:path';
-
+/**
+ * SqlServerMetadataReader smoke tests against the shared Docker fixture.
+ *
+ * Skips rather than fails when the fixture is unavailable — see
+ * `sqlserverFixture.ts` for the gate and how to start the container.
+ */
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -10,20 +13,9 @@ import {
   type PhysicalCatalog,
   type PhysicalObject,
 } from '../../src';
+import { sqlServerAvailable } from './sqlserverFixture';
 
-// Resolved from the working directory rather than `import.meta.url`: this package compiles with
-// `module: commonjs`, where `import.meta` is a hard compile error (TS1343). vitest never typechecks,
-// so nothing surfaced it until `tsc --noEmit` became part of `npm test`.
-const require = createRequire(join(process.cwd(), 'package.json'));
-const hasSqlDriver = (() => {
-  try {
-    require.resolve('mssql');
-    return true;
-  } catch {
-    return false;
-  }
-})();
-const itWithDriver = hasSqlDriver ? it : it.skip;
+const itWithSqlServer = sqlServerAvailable ? it : it.skip;
 
 describe('SqlServerMetadataReader smoke', () => {
   it('explains how to enable the optional mssql dependency when the driver is unavailable', async () => {
@@ -45,7 +37,7 @@ describe('SqlServerMetadataReader smoke', () => {
     );
   });
 
-  itWithDriver(
+  itWithSqlServer(
     'returns table columns with normalized native types, primary keys, and foreign keys',
     async () => {
       const catalog = await introspectStage1Fixture();
@@ -83,7 +75,7 @@ describe('SqlServerMetadataReader smoke', () => {
     120_000,
   );
 
-  itWithDriver(
+  itWithSqlServer(
     'returns view columns with projected native types and nullability from real metadata',
     async () => {
       const catalog = await introspectStage1Fixture();
@@ -105,7 +97,7 @@ describe('SqlServerMetadataReader smoke', () => {
     120_000,
   );
 
-  itWithDriver(
+  itWithSqlServer(
     'is stable across repeated introspection of the same prepared database state',
     async () => {
       const first = await introspectStage1Fixture();
@@ -116,7 +108,7 @@ describe('SqlServerMetadataReader smoke', () => {
     120_000,
   );
 
-  itWithDriver(
+  itWithSqlServer(
     'keeps logical object identity without requiring file-path provenance',
     async () => {
       const catalog = await introspectStage1Fixture();

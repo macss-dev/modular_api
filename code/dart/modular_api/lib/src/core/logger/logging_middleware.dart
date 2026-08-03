@@ -1,4 +1,8 @@
 import 'dart:io';
+// Prefixed deliberately: the OpenTelemetry API exports its own `LogLevel`, which
+// collides with modular_api's. Any file importing both needs this.
+import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart'
+    as otel;
 import 'package:shelf/shelf.dart';
 import '../request_pipeline_audit.dart';
 import 'logger.dart';
@@ -28,6 +32,7 @@ Middleware loggingMiddleware({
   required String serviceName,
   List<String> excludedRoutes = const [],
   StringSink? sink,
+  TraceFieldFormatter? traceFieldFormatter,
 }) {
   final excludedSet = Set<String>.from(excludedRoutes);
 
@@ -40,18 +45,49 @@ Middleware loggingMiddleware({
         return innerHandler(request);
       }
 
-      // 1. Resolve trace_id
-      final traceId = request.headers['X-Request-ID']?.isNotEmpty == true
-          ? request.headers['X-Request-ID']!
-          : generateUuidV4();
+      // 1. Resolve the ids from the ambient span.
+      //
+      // The tracing middleware is outermost (D12 as reversed), so when tracing is
+      // configured a recording span is already active here — and it stays active for
+      // `request completed` too, which is emitted from inside its scope. That is what
+      // lets both lines carry the same ids with nothing mutated afterwards.
+      //
+      // With no recording span, this is byte-for-byte the behaviour it always had: the
+      // caller's X-Request-ID or a fresh dashed UUID. D5b's compatibility guarantee is
+      // therefore structural rather than conditional — there is no tracing flag to
+      // consult, only whether a span exists.
+      final activeSpan = otel.Context.current.span;
+      final tracingActive = activeSpan != null && activeSpan.spanContext.isValid;
+
+      final String traceId;
+      final String? spanId;
+      final String? requestId;
+      if (tracingActive) {
+        traceId = activeSpan.spanContext.traceId.hexString;
+        spanId = activeSpan.spanContext.spanId.hexString;
+        // Preserved beside the trace id rather than promoted into it (D6).
+        requestId = request.headers['X-Request-ID']?.isNotEmpty == true
+            ? request.headers['X-Request-ID']
+            : null;
+      } else {
+        traceId = request.headers['X-Request-ID']?.isNotEmpty == true
+            ? request.headers['X-Request-ID']!
+            : generateUuidV4();
+        spanId = null;
+        requestId = null;
+      }
 
       // 2. Create per-request logger
       final logger = RequestScopedLogger(
         traceId: traceId,
         logLevel: logLevel,
         serviceName: serviceName,
+        spanId: spanId,
+        requestId: requestId,
+        traceFieldFormatter: traceFieldFormatter,
         sink: sink ?? stdout,
       );
+
       final auditState = RequestPipelineAuditState();
 
       final method = request.method.toUpperCase();

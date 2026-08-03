@@ -1,10 +1,17 @@
-"""SQL Server metadata reader smoke tests against the shared Docker fixture."""
+"""SQL Server metadata reader smoke tests against the shared Docker fixture.
+
+Start the fixture with ``docker compose up -d`` in ``code/infra/docker``. These
+tests **skip** rather than fail when the container is not running — see the
+reachability probe in ``conftest.py``.
+"""
 
 from __future__ import annotations
 
 import pytest
 
 pytest.importorskip("pyodbc")
+
+pytestmark = pytest.mark.usefixtures("require_sqlserver")
 
 from modular_api.graphql.sqlserver import (
     PhysicalCatalog,

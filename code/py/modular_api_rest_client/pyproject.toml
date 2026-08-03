@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "macss-modular-api-rest-client"
-version = "0.6.0"
+version = "0.7.0"
 description = "Official MACSS outbound REST client for Python."
 readme = "README.md"
 license = "MIT"
@@ -21,7 +21,12 @@ classifiers = [
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+    # OpenTelemetry API only — never the SDK, an exporter, grpcio or protobuf. Declared
+    # directly rather than inherited, because this package does not depend on
+    # macss-modular-api (runbook D21). The API is no-op without an SDK.
+    "opentelemetry-api>=1.44,<2",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -63,6 +68,15 @@ reportUnknownParameterType = false
 reportUnknownLambdaType = false
 reportMissingParameterType = false
 reportMissingTypeArgument = false
+# A pytest fixture is called by name through collection, never by a reference the checker can see, so
+# `reportUnusedFunction` reports every `autouse` fixture in this tree. That is the tool not modelling
+# pytest, not dead code. `reportUnusedImport` and `reportUnusedVariable` stay on — those do find dead
+# code, and they did.
+reportUnusedFunction = false
+reportUnusedClass = false
+# Tests legitimately reach into internals to exercise them directly. In `src/` this rule found real
+# coupling and it was fixed rather than silenced.
+reportPrivateUsage = false
 # `example/` is documentation a consumer copies, not a published typed surface — same relaxed family
 # as `tests/`, and the same expectation that nothing which can indicate a real defect is silenced.
 [[tool.pyright.executionEnvironments]]

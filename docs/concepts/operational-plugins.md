@@ -13,6 +13,14 @@ server root.
 | OpenAPI YAML | GET | `/api/v1/openapi.yaml` | always on |
 | Metrics | GET | `/api/v1/metrics` | opt-in (`metricsEnabled: true`) |
 
+**Tracing is deliberately absent from this table.** It is the framework's third
+observability signal, but it has no endpoint: spans leave through an exporter the
+application configures, not over HTTP. It is also not a plugin — the server span
+has to sit *outside* every plugin middleware slot, and a plugin registers *into* a
+slot by definition. See [ADR-0005](../adr/0005-tracing-in-core-speaking-otlp.md)
+amendment A7, and the
+[observability guide](../guides/observability.md#distributed-tracing) for setup.
+
 ## Migration note (pre-0.4.7 consumers)
 
 Early 0.4.x versions (up to 0.4.4) served these endpoints at the server root

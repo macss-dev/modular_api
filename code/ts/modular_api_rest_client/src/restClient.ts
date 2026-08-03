@@ -1,3 +1,5 @@
+import { ClientCallTracing, REQUEST_ID_HEADER } from './clientTracing';
+
 export type ServiceDecoder<T> = (value: unknown) => T;
 export type ServiceAuthProvider = (
   operation: ServiceOperation,
@@ -331,6 +333,14 @@ export class HttpServiceClient implements ServiceClient {
         ? undefined
         : setTimeout(() => controller.abort(), this.config.timeout);
 
+    // Client span plus trace-context and request-id injection. Zero configuration: the
+    // parent is the ambient server span and the tracer the global provider, both no-ops
+    // when no OpenTelemetry SDK is registered.
+    const tracing = ClientCallTracing.start(
+      { method: operation.method, operationId: operation.operationId, url, headers },
+      headers[REQUEST_ID_HEADER],
+    );
+
     try {
       const response = await this.fetchImpl(url, {
         method: operation.method,
@@ -339,6 +349,10 @@ export class HttpServiceClient implements ServiceClient {
         signal: controller.signal,
       });
       const text = await response.text();
+      // The span closes as soon as the response is in hand, so its duration measures the
+      // call rather than the decoding that follows it. Both success and non-2xx go through
+      // here; only a thrown error takes the catch below.
+      tracing.complete({ statusCode: response.status });
       const elapsed = performance.now() - startedAt;
       const headerMap = flattenHeaders(response.headers);
 
@@ -374,6 +388,9 @@ export class HttpServiceClient implements ServiceClient {
         }),
       );
     } catch (error) {
+      // No response at all: a timeout, an aborted request, a refused connection. The case
+      // that matters most for the socia burst, and unambiguously an error.
+      tracing.complete({ error });
       if (controller.signal.aborted || isAbortError(error)) {
         return ServiceResult.failure(
           new ServiceFailure({

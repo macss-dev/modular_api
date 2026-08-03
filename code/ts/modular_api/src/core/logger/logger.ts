@@ -64,12 +64,39 @@ export type WriteFn = (line: string) => void;
  * Accepts an optional `writeFn` for output — defaults to `console.log`.
  * In tests, pass a capturing function to inspect output without side-effects.
  */
+/**
+ * Builds platform-specific correlation fields from the ids the framework resolved.
+ *
+ * The framework emits open formats and nothing vendor-specific (roadmap invariant 7), so
+ * a field like Google's `logging.googleapis.com/trace` — which needs a project id the
+ * framework has no business knowing — is produced by the application.
+ */
+export type TraceFieldFormatter = (
+  traceId: string,
+  spanId: string | undefined,
+) => Record<string, unknown>;
+
 export class RequestScopedLogger implements ModularLogger {
   constructor(
     readonly traceId: string,
     readonly logLevel: LogLevel,
     readonly serviceName: string,
     private readonly writeFn: WriteFn = (line) => process.stdout.write(line + '\n'),
+    /**
+     * The caller's `X-Request-ID`, when it sent one. Preserved beside {@link traceId}
+     * rather than promoted into it (runbook D6).
+     */
+    readonly requestId?: string,
+    /**
+     * The active server span's id, when tracing is configured.
+     *
+     * Known at construction because the tracing middleware is **outermost** (runbook D12
+     * as reversed): the span already exists when `loggingMiddleware` creates this logger,
+     * so nothing needs mutating afterwards.
+     */
+    readonly spanId?: string,
+    /** Builds platform correlation fields. Undefined means none are emitted. */
+    private readonly traceFieldFormatter?: TraceFieldFormatter,
   ) {}
 
   // ─── Public API (8 RFC 5424 levels) ──────────────────────────────
@@ -154,7 +181,15 @@ export class RequestScopedLogger implements ModularLogger {
       msg,
       service: this.serviceName,
       trace_id: this.traceId,
+      ...(this.spanId === undefined ? {} : { span_id: this.spanId }),
+      ...(this.requestId === undefined ? {} : { request_id: this.requestId }),
     };
+
+    // Only when there is trace context to point at. A platform field naming a trace
+    // that does not exist is worse than no field.
+    if (this.traceFieldFormatter !== undefined && this.spanId !== undefined) {
+      Object.assign(entry, this.traceFieldFormatter(this.traceId, this.spanId));
+    }
 
     if (opts.extra) Object.assign(entry, opts.extra);
     if (opts.fields) entry['fields'] = opts.fields;

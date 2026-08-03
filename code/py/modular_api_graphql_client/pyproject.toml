@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "macss-modular-api-graphql-client"
-version = "0.6.0"
+version = "0.7.0"
 description = "Official MACSS outbound GraphQL client for Python."
 readme = "README.md"
 license = "MIT"
@@ -63,6 +63,15 @@ reportUnknownParameterType = false
 reportUnknownLambdaType = false
 reportMissingParameterType = false
 reportMissingTypeArgument = false
+# A pytest fixture is called by name through collection, never by a reference the checker can see, so
+# `reportUnusedFunction` reports every `autouse` fixture in this tree. That is the tool not modelling
+# pytest, not dead code. `reportUnusedImport` and `reportUnusedVariable` stay on — those do find dead
+# code, and they did.
+reportUnusedFunction = false
+reportUnusedClass = false
+# Tests legitimately reach into internals to exercise them directly. In `src/` this rule found real
+# coupling and it was fixed rather than silenced.
+reportPrivateUsage = false
 # `example/` is documentation a consumer copies, not a published typed surface — same relaxed family
 # as `tests/`, and the same expectation that nothing which can indicate a real defect is silenced.
 [[tool.pyright.executionEnvironments]]
