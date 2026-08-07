@@ -261,14 +261,16 @@ ORDER BY source_schema.name, source_object.name, fk.name, fkc.constraint_column_
 
 def _load_pyodbc_connect() -> ConnectFn:
     try:
-        import pyodbc
+        import pyodbc  # pyright: ignore[reportMissingImports]
     except ModuleNotFoundError as error:
         raise RuntimeError(
             'SqlServerMetadataReader requires the optional "pyodbc" package. '
             'Install it to use SQL Server introspection.'
         ) from error
 
-    return cast(ConnectFn, pyodbc.connect)
+    # El miembro es desconocido porque el import de arriba no se resuelve; el cast es lo que
+    # declara la forma que este modulo necesita.
+    return cast(ConnectFn, pyodbc.connect)  # pyright: ignore[reportUnknownMemberType]
 
 
 def _run_metadata_query(

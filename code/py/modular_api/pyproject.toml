@@ -89,6 +89,19 @@ reportUnusedClass = false
 # coupling — a middleware importing another module's private default, a metric reading a private field
 # off a different object — and both were fixed rather than silenced.
 reportPrivateUsage = false
+# `tools/` are developer scripts run by hand from this repository — same standing as `tests/`: they
+# bind nobody outside it. Sin esta entrada quedaban bajo strict completo, y `tools/dump_span_shape.py`
+# fallaba por el tipo parcial de `httpx.post`. Lo descubrio CI, no una corrida local.
+[[tool.pyright.executionEnvironments]]
+root = "tools"
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportUnknownParameterType = false
+reportUnknownLambdaType = false
+reportMissingParameterType = false
+reportMissingTypeArgument = false
+
 # `example/` is documentation a consumer copies, not a published typed surface — same relaxed family
 # as `tests/`, and the same expectation that nothing which can indicate a real defect is silenced.
 [[tool.pyright.executionEnvironments]]
