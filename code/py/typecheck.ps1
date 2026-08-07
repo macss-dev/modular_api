@@ -27,17 +27,29 @@
 [CmdletBinding()]
 param(
     # Check a single package instead of all five.
-    [string] $Package
+    [string] $Package,
+
+    # The interpreter to run pyright with. Defaults to the local venv when it exists, otherwise to
+    # whatever `python` is on PATH.
+    [string] $Python
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $pyRoot = $PSScriptRoot
-$python = Join-Path $pyRoot 'modular_api\.venv\Scripts\python.exe'
 
-if (-not (Test-Path -LiteralPath $python)) {
-    Write-Error "No venv at $python. See the prerequisites at the top of this script."
+# The venv path used to be hardcoded, which made this gate runnable on exactly one machine — and a
+# gate that has only ever run in one place is close to a gate that has never run. CI has no venv, so
+# it falls through to the interpreter on PATH and the same script serves both.
+$venvPython = Join-Path $pyRoot 'modular_api\.venv\Scripts\python.exe'
+$python =
+    if ($Python) { $Python }
+    elseif (Test-Path -LiteralPath $venvPython) { $venvPython }
+    else { (Get-Command python -ErrorAction SilentlyContinue).Source }
+
+if (-not $python) {
+    Write-Error "No interpreter found: no venv at $venvPython, and no 'python' on PATH. Pass -Python <path>."
     exit 1
 }
 

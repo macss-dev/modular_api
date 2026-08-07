@@ -1,0 +1,150 @@
+# Runs the test suites of the 15 packages on every pull request.
+#
+# Why this file exists: until now the repository had sixteen workflows and **none** triggered on
+# `pull_request`. The fifteen publish-*.yml are manual (`workflow_dispatch`) and release.yml fires on a
+# tag. So no pull request had ever been verified automatically — every green result was somebody
+# running the suites by hand.
+#
+# That is how three broken gates survived into 0.7.0: a transport-neutrality test that was recorded as
+# met and never existed, an `npm install` that left the TypeScript lockfile with no authority at publish
+# time, and a Python publish job that ran pytest without installing the package under test. Two of them
+# were found *after* publishing to three registries, where nothing can be undone.
+#
+# What this file does NOT catch, said here so nobody assumes otherwise: the satellites resolve their
+# sibling from the registry, not from the working tree. `modular_api_sqlserver` asks pub.dev for
+# `modular_api ^0.7.0`, so a pull request that breaks the Dart core will not turn its tests red.
+# Covering that needs local overrides in CI, which means testing a combination no consumer will ever
+# have — a separate decision, not an oversight.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Per ref, so pushing again to a pull request replaces the in-flight run instead of queueing behind
+  # it. Runs on main are not cancelled: the result for a merged commit is worth waiting for.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  dart:
+    name: dart · ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      # fail-fast off on purpose: when something breaks, the useful information is *which* packages
+      # broke, not the first one alphabetically.
+      fail-fast: false
+      matrix:
+        package:
+          - modular_api
+          - modular_api_rest_client
+          - modular_api_graphql_client
+          - modular_api_postgres
+          - modular_api_sqlserver
+    defaults:
+      run:
+        working-directory: code/dart/${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+
+      - name: Resolve dependencies
+        run: dart pub get
+
+      # The analyzer is the Dart counterpart of tsc and pyright. It is a separate step from the tests
+      # so a red run says which of the two failed without reading the log.
+      - name: Analyze
+        run: dart analyze
+
+      # The Collector integration test is skipped by a declared tag in dart_test.yaml — it needs a real
+      # OpenTelemetry Collector, and CI has none. It runs locally with `dart test --run-skipped`.
+      - name: Test
+        run: dart test
+
+  typescript:
+    name: npm · ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - modular_api
+          - modular_api_rest_client
+          - modular_api_graphql_client
+          - modular_api_postgres
+          - modular_api_sqlserver
+    defaults:
+      run:
+        working-directory: code/ts/${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # `npm ci`, not `npm install`: it installs exactly the lockfile and fails when the lockfile and
+      # package.json disagree. That disagreement is a real defect this repository has already had — the
+      # graphql client's committed lockfile pinned rest-client 0.4.7 against a declared ^0.6.0, and the
+      # publish job's `npm install` resolved past it in silence for two minor versions.
+      - name: Install from the lockfile
+        run: npm ci
+
+      # `npm test` already chains `tsc --noEmit` before vitest in all five packages, so the type check
+      # is inside this step. vitest does not type-check, which is how 30 uncompilable tests accumulated.
+      - name: Typecheck and test
+        run: npm test
+
+  python:
+    name: pytest · ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - modular_api
+          - modular_api_rest_client
+          - modular_api_graphql_client
+          - modular_api_postgres
+          - modular_api_sqlserver
+    defaults:
+      run:
+        working-directory: code/py/${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          # Matches the interpreter the publish jobs use. pyright targets 3.11 via
+          # `pythonVersion` in each pyproject.toml; that is the language level it checks against, not
+          # the interpreter it runs on.
+          python-version: '3.12'
+
+      # Installs the package **and its declared dependencies**, not just the tooling. pytest imports
+      # through `pythonpath = ["src"]`, so a package is importable without being installed and its
+      # runtime dependencies never arrive — which held only while these packages had none. 0.7.0 gave
+      # two of them their first (`opentelemetry-api`) and both publish jobs failed after 13 packages
+      # had already gone out.
+      - name: Install the package under test
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      # The SQL Server smoke tests skip rather than fail when the container is absent: the connection
+      # fixture and its reachability probe live in tests/graphql/conftest.py. A suite that reports
+      # failures for missing infrastructure trains the reader to ignore a red result.
+      - name: Test
+        run: python -m pytest
+
+      # Same gate the developer runs locally, same script — so the two cannot drift. It used to hardcode
+      # the venv path, which made it runnable on one machine only.
+      - name: Typecheck
+        shell: pwsh
+        run: pwsh ../typecheck.ps1 -Package ${{ matrix.package }}
