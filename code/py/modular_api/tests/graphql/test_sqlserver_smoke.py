@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
-    import pyodbc
+    import pyodbc  # pyright: ignore[reportMissingImports]
 else:
     pyodbc = pytest.importorskip("pyodbc")
 

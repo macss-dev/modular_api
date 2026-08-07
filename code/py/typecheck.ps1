@@ -79,7 +79,12 @@ foreach ($name in $packages) {
     # report, and parsing it is more robust than scraping human-readable text.
     Push-Location $directory
     try {
-        $raw = & $python -m pyright --outputjson 2>$null
+        # `--pythonpath` no es redundante con lanzar pyright desde ese intérprete: pyright resuelve
+        # los imports contra el entorno que *él* encuentra —y encuentra `.venv` del paquete si
+        # existe—, no contra quien lo lanzó. Sin esta bandera, una corrida local siempre resolvía
+        # contra el venv del desarrollador y daba limpio mientras CI fallaba por un driver opcional
+        # que ese venv tenía instalado. Con la bandera, lo local y CI miran el mismo entorno.
+        $raw = & $python -m pyright --pythonpath $python --outputjson 2>$null
     }
     finally {
         Pop-Location

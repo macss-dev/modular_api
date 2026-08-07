@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
-    import pyodbc
+    import pyodbc  # pyright: ignore[reportMissingImports]
 
 
 def sqlserver_connection_string() -> str:
@@ -59,7 +59,7 @@ def _sqlserver_unavailable_reason() -> str | None:
     Cached: the probe runs at most once per test session.
     """
     try:
-        import pyodbc
+        import pyodbc  # pyright: ignore[reportMissingImports]
     except ImportError:  # pragma: no cover - covered by importorskip in the modules
         return "pyodbc is not installed"
 
@@ -85,7 +85,7 @@ def require_sqlserver() -> None:
 @pytest.fixture(scope="module")
 def sqlserver_connection(require_sqlserver: None) -> Iterator[pyodbc.Connection]:
     """An open connection to the shared SQL Server fixture."""
-    import pyodbc
+    import pyodbc  # pyright: ignore[reportMissingImports]
 
     connection = pyodbc.connect(sqlserver_connection_string(), timeout=5)
     try:
