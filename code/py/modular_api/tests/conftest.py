@@ -19,7 +19,11 @@ from __future__ import annotations
 import asyncio
 import sys
 
-if sys.platform.startswith("win"):
+# `== "win32"`, not `.startswith("win")`: a type checker narrows the platform from the canonical
+# comparison and skips this block entirely off Windows. With `startswith` it cannot, so checking on
+# Linux reported `WindowsSelectorEventLoopPolicy` as a missing attribute of `asyncio` — which it is,
+# there. Same behaviour at runtime; the difference is that one form is legible to the checker.
+if sys.platform == "win32":
     # Deprecated in 3.14, removed in 3.16. Revisit when this project moves past 3.13: the
     # replacement is a loop factory handed to the runner, which pytest-asyncio configures
     # differently. Until then this is the mechanism that works.
